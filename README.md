@@ -1,4 +1,4 @@
-# phylax (φύλαξ)
+# phylax (φύ拉ξ)
 
 [![CI](https://github.com/xuoxod/phylax/actions/workflows/ci.yml/badge.svg)](https://github.com/xuoxod/phylax/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
@@ -7,7 +7,16 @@
 
 > **φύλαξ** (*phýlax* — ancient Greek for *"watcher, sentinel, guardian"*): A sovereign, zero-telemetry edge defense, honeypot tarpit, and autonomous threat neutralization engine written in pure Rust.
 
-`phylax` shields web services, APIs, and authentication endpoints against credential stuffing, automated bots, Tor/datacenter crawlers, Slowloris starvation, and distributed scraping swarms—executing in **sub-microsecond memory operations** without sending a single byte of user telemetry to third-party providers.
+`phylax` shields web applications, APIs, and authentication endpoints against credential stuffing, automated bot swarms, Tor/datacenter crawlers, Slowloris starvation, and scraping—executing in **sub-microsecond memory operations** without sending a single byte of user telemetry to third parties.
+
+---
+
+## Two Ways to Deploy
+
+| Mode | Target User | Mechanism | Setup Time |
+|---|---|---|---|
+| **[Standalone WAF Proxy Daemon](#1-standalone-waf-reverse-proxy-zero-rust-required)** | Node.js, Python, Go, PHP, WordPress, Ruby, Java | Sits in front of any HTTP service as a reverse proxy shield | `30 seconds` |
+| **[Native Rust Library](#2-native-rust-library-integration)** | Axum, Actix-web, Tower, Hyper | Embedded directly into your Rust web service binary | `2 minutes` |
 
 ---
 
@@ -47,51 +56,77 @@ flowchart TD
 
 ---
 
-## Core Capabilities
+## Automated Installation
 
-| Capability | Module | Mechanism | Performance |
-|---|---|---|---|
-| **Invisible Decoy Traps** | [`HoneypotValidator`](src/honeypot.rs) | Synthesizes hidden form fields; traps automated scrapers & autofillers | `~5 ns` |
-| **Asymmetric Tarpit** | [`TarpitGovernor`](src/tarpit.rs) | Reverses Slowloris: trickles byte-by-byte response chunks to lock up bot sockets | Async epoll |
-| **Quadratic PoW Ratcheting** | [`AdaptivePowEngine`](src/adaptive_pow.rs) | Ratchets SHA-256 puzzle difficulty from 12 bits (~5ms) up to 22 bits (10s CPU lockup) | `~500 ns` |
-| **Autonomous CIDR Quarantine** | [`AutonomousQuarantine`](src/autonomous_quarantine.rs) | Expands repeat offender IPs into `/24` (IPv4) or `/48` (IPv6) subnet quarantines | `~10 ns` |
-| **Radix Perimeter Defense** | [`SubnetGuard`](src/subnet_guard.rs) | Zero-allocation radix tree matching known Tor exit nodes and datacenter CIDRs | `~15 ns` |
-| **Email Sybil Sanitizer** | [`EmailPatternGuard`](src/email_guard.rs) | Normalizes Gmail dot-scattering (`j.o.h.n@gmail.com` $\to$ `john@gmail.com`) & blocks throwaways | `~30 ns` |
-| **HMAC Interaction Timing** | [`TimingGuard`](src/timing.rs) | Signed cryptographic timestamp tokens enforcing human submission cadence | `~200 ns` |
-| **Breached Credential Bloom** | [`CredentialGuard`](src/credential_guard.rs) | 8 KB in-memory Bloom filter matching top breached passwords without external calls | `<25 ns` |
-| **Target Account Velocity** | [`CredentialGuard`](src/credential_guard.rs) | Sliding-window defense against distributed password-spraying across target usernames | `~40 ns` |
-| **Impossible Travel Sentinel** | [`SessionSentinel`](src/session_sentinel.rs) | Client subnet hash + User-Agent fingerprint binding with Haversine velocity limits | `~150 ns` |
-| **WebRTC Relay Guard** | [`TurnGuard`](src/turn_guard.rs) | Ephemeral HMAC-SHA1 tokens with TTLs and per-IP allocation limits for COTURN relays | `~100 ns` |
-| **Binary Voucher Guard** | [`DistGuard`](src/dist_guard.rs) | Cryptographically signed single-use vouchers and byte-range scrape limits | `~100 ns` |
-| **Slowloris Stream Guard** | [`StreamGuard`](src/stream_guard.rs) | Content-Length enforcement and minimum throughput rate timers ($>1\text{ KB/s}$) | `~50 ns` |
-| **Zero-Lock Atomic Cache** | [`CacheShield`](src/cache_shield.rs) | Lock-free in-memory cache utilizing SHA-256 ETag and `If-None-Match` 304 revalidation | `~20 ns` |
-| **Zero-Leak Memory Hygiene** | [`MaintenanceManager`](src/maintenance.rs) | Non-blocking background worker that automatically prunes expired bans and decayed state | Lock-free |
-| **Collaborative Abuse Reporting** | [`InformantEngine`](src/abuse_reporting/pipeline.rs) | Optional RFC-compliant X-ARF packaging and AbuseIPDB reporting with 24h deduplication | Async background |
+### Linux & macOS (Automated Script)
+Installs the `phylax` binary to `/usr/local/bin`, generates `/etc/phylax/phylax.toml`, and configures a systemd service unit on Linux:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/xuoxod/phylax/main/scripts/install.sh | bash
+```
+
+### Windows (PowerShell)
+```powershell
+irm https://raw.githubusercontent.com/xuoxod/phylax/main/scripts/install.ps1 | iex
+```
+
+### Via Cargo
+```bash
+# Install standalone CLI binary with WAF reverse proxy
+cargo install --git https://github.com/xuoxod/phylax.git --features cli
+
+# Or add as an ultra-lean library dependency in your Cargo.toml
+cargo add --git https://github.com/xuoxod/phylax.git phylax
+```
+
+### Via Docker
+```bash
+docker run -d --name phylax -p 80:3000 \
+  ghcr.io/xuoxod/phylax:latest \
+  serve --upstream http://host.docker.internal:8080 --listen 0.0.0.0:3000
+```
 
 ---
 
-## Installation
+## Quickstart Guide
+
+### 1. Standalone WAF Reverse Proxy (Zero Rust Required)
+
+Protect any backend application running on port `8080` (Node.js, Django, Go, PHP, WordPress):
+
+```bash
+# 1. Start the proxy in front of your service
+$ phylax serve --upstream http://127.0.0.1:8080 --listen 0.0.0.0:3000
+
+# 2. Test challenge issuance from any client
+$ curl -s http://127.0.0.1:3000/_phylax/challenge
+
+# 3. Test honeypot trap behavior
+$ curl -i -X POST http://127.0.0.1:3000/auth/register?website_url=http://bot.com
+HTTP/1.1 403 Forbidden
+{"engine":"Phylax Sovereign Edge Defense","error":"Automated submission detected (trap tripped).","status":"BLOCKED"}
+```
+
+#### Production Configuration (`phylax.toml`)
+Generate and customize a production configuration:
+
+```bash
+$ phylax init --output /etc/phylax/phylax.toml
+$ phylax serve --config /etc/phylax/phylax.toml
+```
+
+---
+
+### 2. Native Rust Library Integration
 
 Add `phylax` to your `Cargo.toml`:
 
-### Core Engine (Zero Extra Dependencies)
 ```toml
 [dependencies]
 phylax = { git = "https://github.com/xuoxod/phylax.git" }
 ```
 
-### With Optional Collaborative Threat Reporting
-Enables AbuseIPDB v2 dispatch, RDAP ISP contact resolution, and X-ARF incident packaging via `reqwest` and `rustls`:
-```toml
-[dependencies]
-phylax = { git = "https://github.com/xuoxod/phylax.git", features = ["abuse-reporting"] }
-```
-
----
-
-## Quickstart: Axum Integration
-
-A complete, production-ready Axum edge defense setup. Demonstrates issuing frontend challenges and evaluating incoming requests fail-fast:
+Complete, verified Axum edge defense setup:
 
 ```rust
 use axum::{
@@ -121,36 +156,20 @@ struct RegisterRequest {
     pow_nonce: Option<u64>,
 }
 
-#[derive(Serialize)]
-struct ChallengeResponse {
-    timing_token: String,
-    pow_challenge: String,
-    pow_seed: String,
-    pow_difficulty: u8,
-    decoy_fields: Vec<String>,
-}
-
 // 1. Issue challenge context to legitimate frontends
 async fn challenge_handler(State(state): State<AppState>) -> impl IntoResponse {
-    let now_ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as u64;
-
+    let now_ms = current_timestamp_ms();
     let seed_nonce = 42;
     let ctx = state.phylax.issue_client_context(now_ms, seed_nonce);
     Json(ctx)
 }
 
-// 2. Protect sensitive mutations (registration, login, contact forms)
+// 2. Protect sensitive mutations (registration, login, checkout)
 async fn register_handler(
     State(state): State<AppState>,
     Json(payload): Json<RegisterRequest>,
 ) -> impl IntoResponse {
-    let now_ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as u64;
+    let now_ms = current_timestamp_ms();
 
     let mut submitted_fields = Vec::new();
     if let Some(ref decoy) = payload.website_url {
@@ -192,7 +211,6 @@ async fn register_handler(
 
 #[tokio::main]
 async fn main() {
-    // Construct the sovereign shield pipeline
     let phylax = Arc::new(
         PhylaxPipeline::builder()
             .secret_key(b"production-hmac-master-key-seed-2026")
@@ -214,16 +232,38 @@ async fn main() {
     println!("Phylax protected edge server listening on http://0.0.0.0:3000");
     axum::serve(listener, app).await.unwrap();
 }
+
+fn current_timestamp_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64
+}
 ```
+
+---
+
+## CLI Command Reference
+
+The `phylax` binary provides built-in tools for WAF hosting, challenge issuance, puzzle solving, and diagnostics:
+
+| Command | Usage | Description |
+|---|---|---|
+| `serve` | `phylax serve --upstream <URL> --listen <ADDR>` | Starts the high-performance WAF reverse proxy daemon |
+| `challenge` | `phylax challenge --difficulty <BITS>` | Issues a fresh cryptographic challenge JSON to stdout |
+| `solve` | `phylax solve --seed <SEED> --difficulty <BITS>` | Computes SHA-256 PoW nonce client-side for testing |
+| `check-ip` | `phylax check-ip --ip <IP> [--api-key <KEY>]` | Inspects an IP against radix subnets and AbuseIPDB |
+| `init` | `phylax init [--output <PATH>]` | Generates a documented `phylax.toml` configuration template |
+| `bench` | `phylax bench` | Runs internal sub-microsecond microbenchmark suite |
 
 ---
 
 ## Real-World Telemetry & Production Traces
 
-The following traces represent real-world defense operations captured against live distributed crawler swarms:
+The following traces represent defense operations captured against live distributed crawler swarms:
 
 ### 1. Honeypot Trap & Autonomous CIDR Quarantine
-When a headless crawler blind-populates an invisible DOM decoy field:
+When an automated crawler populates an invisible DOM decoy field:
 
 ```text
 [PHYLAX PERIMETER] Trapped automated submission on endpoint '/auth/register'
@@ -341,20 +381,17 @@ Throughput Capacity                > 1,000,000 requests/sec/core
 
 ---
 
-## Running the Examples & Verification
+## Testing & Verification Suite
 
 ```bash
-# Run Axum edge defense demo server
-$ cargo run --example axum_edge_defense
-
-# Run standalone 8KB Breached Password Bloom demo
-$ cargo run --example standalone_bloom
-
 # Execute full unit, integration, and deception test suite (84 tests)
 $ cargo test --all-targets --all-features
 
 # Verify strict clippy compliance
 $ cargo clippy --all-targets --all-features -- -D warnings
+
+# Verify formatting
+$ cargo fmt -- --check
 ```
 
 ---

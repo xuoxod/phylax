@@ -1,0 +1,33 @@
+# ==============================================================================
+# Phylax (φύλαξ) — Standalone WAF Proxy Docker Compose Example
+# Protects an upstream backend service (Node.js, Python, Go, PHP, etc.)
+# ==============================================================================
+services:
+  # Sovereign Edge Defense WAF Reverse Proxy
+  phylax:
+    build: .
+    ports:
+      - "80:3000"
+    environment:
+      - RUST_LOG=info
+      # Optional: Add your AbuseIPDB key for collaborative threat reporting
+      # - ABUSEIPDB_API_KEY=your_api_key_here
+    command: >
+      serve
+      --upstream http://backend:8080
+      --listen 0.0.0.0:3000
+      --pow-difficulty 12
+      --timing-min-ms 2000
+      --tarpit true
+      --quarantine true
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Example Backend Service (Replace with your Node/Django/Go/Laravel app)
+  backend:
+    image: hashicorp/http-echo:latest
+    command: ["-text=Hello from protected backend behind Phylax!"]
+    ports:
+      - "8080"
+    restart: unless-stopped

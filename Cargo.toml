@@ -13,6 +13,17 @@ categories = ["web-programming", "network-programming", "cryptography"]
 [features]
 default = []
 abuse-reporting = ["dep:reqwest", "dep:async-trait", "dep:tracing"]
+cli = [
+    "abuse-reporting",
+    "dep:clap",
+    "dep:axum",
+    "dep:tower-http",
+    "dep:tracing-subscriber",
+    "dep:toml",
+    "tokio/macros",
+    "tokio/rt-multi-thread",
+    "tokio/signal",
+]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
@@ -27,13 +38,25 @@ thiserror = "1.0"
 tokio = { version = "1.38", features = ["sync", "time", "rt"] }
 
 # Optional Dependencies for Collaborative Abuse Reporting
-reqwest = { version = "0.12", optional = true, default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", optional = true, default-features = false, features = ["json", "rustls-tls", "stream"] }
 async-trait = { version = "0.1", optional = true }
 tracing = { version = "0.1", optional = true }
+
+# Optional Dependencies for Standalone WAF Proxy & CLI
+clap = { version = "4.5", features = ["derive", "env"], optional = true }
+axum = { version = "0.7", optional = true }
+tower-http = { version = "0.6", features = ["trace"], optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
+toml = { version = "0.8", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.38", features = ["full", "test-util"] }
 axum = "0.7"
+
+[[bin]]
+name = "phylax"
+path = "src/bin/phylax.rs"
+required-features = ["cli"]
 
 [[example]]
 name = "axum_edge_defense"
