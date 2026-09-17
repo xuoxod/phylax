@@ -9,9 +9,9 @@ use crate::pow::{PowEngine, PowVerdict};
 use crate::subnet_guard::{SubnetGuard, SubnetVerdict};
 use crate::tarpit::{TarpitConfig, TarpitGovernor};
 use crate::timing::{TimingGuard, TimingVerdict};
+use serde::{Deserialize, Serialize};
 #[cfg(feature = "abuse-reporting")]
 use std::sync::Arc;
-use serde::{Deserialize, Serialize};
 
 /// Request context submitted for Shield verification
 #[derive(Debug, Clone, Default)]

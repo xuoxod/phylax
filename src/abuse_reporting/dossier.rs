@@ -41,7 +41,9 @@ impl DossierFormatter {
             comment.push_str(&format!("User-Agent: {}\n", ua));
         }
 
-        comment.push_str("Forensic validation: Automated probe detected by deterministic application defense.");
+        comment.push_str(
+            "Forensic validation: Automated probe detected by deterministic application defense.",
+        );
 
         // Guard against AbuseIPDB 1024 character hard ceiling
         if comment.len() > 1024 {

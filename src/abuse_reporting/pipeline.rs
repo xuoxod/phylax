@@ -35,10 +35,7 @@ impl Default for InformantConfig {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InformantVerdict {
     /// Incident successfully reported to upstream threat intelligence
-    Reported {
-        ip: String,
-        confidence_score: u32,
-    },
+    Reported { ip: String, confidence_score: u32 },
     /// Incident verified and formatted in dry-run mode
     DryRunReported {
         ip: String,
@@ -65,7 +62,10 @@ impl std::fmt::Debug for InformantEngine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("InformantEngine")
             .field("config", &self.config)
-            .field("daily_reports_count", &self.cooldown_governor.daily_reports_count())
+            .field(
+                "daily_reports_count",
+                &self.cooldown_governor.daily_reports_count(),
+            )
             .finish()
     }
 }
@@ -94,7 +94,10 @@ impl InformantEngine {
         }
 
         // 2. Check deduplication & daily quota cooldown
-        if !self.cooldown_governor.should_report(&dossier.client_ip, dossier.timestamp_ms) {
+        if !self
+            .cooldown_governor
+            .should_report(&dossier.client_ip, dossier.timestamp_ms)
+        {
             tracing::debug!(
                 "🛑 [INFORMANT] Incident report suppressed by cooldown for IP '{}'",
                 dossier.client_ip
@@ -113,7 +116,8 @@ impl InformantEngine {
                 categories,
                 comment
             );
-            self.cooldown_governor.record_reported(&dossier.client_ip, dossier.timestamp_ms);
+            self.cooldown_governor
+                .record_reported(&dossier.client_ip, dossier.timestamp_ms);
             return InformantVerdict::DryRunReported {
                 ip: dossier.client_ip.clone(),
                 categories,
@@ -125,7 +129,9 @@ impl InformantEngine {
         let api_key = match self.config.api_key.as_deref() {
             Some(key) if !key.trim().is_empty() => key,
             _ => {
-                let err_msg = "Abuse reporting is enabled but no valid AbuseIPDB API key was provided".to_string();
+                let err_msg =
+                    "Abuse reporting is enabled but no valid AbuseIPDB API key was provided"
+                        .to_string();
                 tracing::warn!("⚠️ [INFORMANT] {}", err_msg);
                 return InformantVerdict::Error(err_msg);
             }
@@ -145,7 +151,8 @@ impl InformantEngine {
                     resp.ip_address,
                     resp.abuse_confidence_score
                 );
-                self.cooldown_governor.record_reported(&dossier.client_ip, dossier.timestamp_ms);
+                self.cooldown_governor
+                    .record_reported(&dossier.client_ip, dossier.timestamp_ms);
                 InformantVerdict::Reported {
                     ip: resp.ip_address,
                     confidence_score: resp.abuse_confidence_score,
@@ -174,7 +181,10 @@ impl InformantEngine {
     pub async fn check_ip(
         &self,
         ip: &str,
-    ) -> Result<crate::abuse_reporting::abuseipdb::AbuseIpDbCheckResponse, crate::abuse_reporting::error::AbuseReportError> {
+    ) -> Result<
+        crate::abuse_reporting::abuseipdb::AbuseIpDbCheckResponse,
+        crate::abuse_reporting::error::AbuseReportError,
+    > {
         let api_key = match self.config.api_key.as_deref() {
             Some(key) if !key.trim().is_empty() => key,
             _ => return Err(crate::abuse_reporting::error::AbuseReportError::MissingApiKey),

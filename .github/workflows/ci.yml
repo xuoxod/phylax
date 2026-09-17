@@ -42,11 +42,11 @@ jobs:
       - name: Check code formatting
         run: cargo fmt -- --check
 
-      - name: Clippy linter
-        run: cargo clippy --all-targets -- -D warnings
+      - name: Clippy linter (all features)
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
-      - name: Run unit and integration tests
-        run: cargo test --all-targets --verbose
+      - name: Run unit and integration tests (all features)
+        run: cargo test --all-targets --all-features --verbose
 
       - name: Run examples
         run: |

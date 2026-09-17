@@ -91,7 +91,9 @@ async fn test_pipeline_spawn_background_maintenance_cleans_autonomously() {
         .as_millis() as u64;
 
     // Trigger quarantine infraction
-    pipeline.quarantine().record_and_check("192.168.1.100", now_ms);
+    pipeline
+        .quarantine()
+        .record_and_check("192.168.1.100", now_ms);
     pipeline.adaptive_pow().record_infraction(
         "192.168.1.100",
         InfractionSeverity::Suspicious,
