@@ -106,6 +106,7 @@ async fn register_handler(
         pow_nonce: payload.pow_nonce,
         email: Some(&payload.email),
         now_ms,
+        ..Default::default()
     };
 
     match state.phylax.evaluate(&req) {

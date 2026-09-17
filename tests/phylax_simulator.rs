@@ -44,6 +44,7 @@ fn test_simulator_headless_dom_scraper_trips_honeypot() {
         pow_nonce: Some(0),
         email: Some(bot_attack.email),
         now_ms: now_ms + bot_attack.submit_delay_ms,
+        ..Default::default()
     };
 
     let verdict = pipeline.evaluate(&req);
@@ -57,7 +58,10 @@ fn test_simulator_headless_dom_scraper_trips_honeypot() {
 
 #[test]
 fn test_simulator_speed_demon_crawlers_rejected_by_timing() {
-    let pipeline = ShieldPipeline::builder().with_timing(2500, 60_000).build();
+    let pipeline = ShieldPipeline::builder()
+        .with_timing(2500, 60_000)
+        .enable_pow(false)
+        .build();
 
     let now_ms = 1_000_000;
     let client_ctx = pipeline.issue_client_context(now_ms, 2);
@@ -76,6 +80,7 @@ fn test_simulator_speed_demon_crawlers_rejected_by_timing() {
         pow_nonce: Some(0),
         email: Some("curl_bot@attacker.io"),
         now_ms: now_ms + 85, // Only 85ms!
+        ..Default::default()
     };
 
     let verdict = pipeline.evaluate(&req);
@@ -109,6 +114,7 @@ fn test_simulator_tor_exit_node_credential_stuffing_blocked() {
         pow_nonce: Some(0),
         email: Some("da.nj.ba.r.t.h.ol.omew@gmail.com"),
         now_ms: now_ms + 4000,
+        ..Default::default()
     };
 
     let verdict = pipeline.evaluate(&req);
@@ -139,6 +145,7 @@ fn test_simulator_pow_puzzle_tampering_and_replay_attacks() {
         pow_nonce: None,
         email: Some("operator@rmediatech.com"),
         now_ms: now_ms + 3000,
+        ..Default::default()
     };
     assert_eq!(
         pipeline.evaluate(&req_no_nonce),
@@ -154,6 +161,7 @@ fn test_simulator_pow_puzzle_tampering_and_replay_attacks() {
         pow_nonce: Some(valid_nonce),
         email: Some("operator@rmediatech.com"),
         now_ms: now_ms + 3000,
+        ..Default::default()
     };
     assert!(pipeline.evaluate(&req_valid).is_allowed());
 
@@ -194,6 +202,7 @@ fn test_simulator_legitimate_human_operator_end_to_end() {
         pow_nonce: Some(pow_nonce),
         email: Some("rick@rmediatech.com"),
         now_ms: now_ms + 4200,
+        ..Default::default()
     };
 
     let verdict = pipeline.evaluate(&req);
@@ -236,6 +245,7 @@ fn test_simulator_stress_flood_throughput() {
             pow_nonce: None,
             email: Some("spammer@botnet.com"),
             now_ms: now_ms + (i as u64),
+            ..Default::default()
         };
         let verdict = pipeline.evaluate(&req);
         assert!(verdict.is_denied());

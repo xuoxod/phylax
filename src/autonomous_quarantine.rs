@@ -101,9 +101,47 @@ impl AutonomousQuarantine {
         false
     }
 
-    /// Remove expired bans to keep memory lean
-    pub fn purge_expired(&self, now_ms: u64) {
+    /// Remove expired bans and stale infractions to keep memory lean.
+    /// Returns the number of expired subnet bans pruned.
+    pub fn purge_expired(&self, now_ms: u64) -> usize {
         let mut bans = self.active_bans.write();
+        let before_bans = bans.len();
         bans.retain(|_, expires_at| *expires_at > now_ms);
+        let pruned_bans = before_bans.saturating_sub(bans.len());
+
+        let mut infractions = self.ip_infractions.write();
+        let cutoff = now_ms.saturating_sub(self.config.quarantine_duration_ms);
+        infractions.retain(|_, (_, last_ts)| *last_ts > cutoff);
+
+        pruned_bans
+    }
+
+    /// Current count of active quarantined CIDR blocks
+    pub fn active_bans_count(&self) -> usize {
+        self.active_bans.read().len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_purge_expired_cleans_old_bans_and_infractions() {
+        let aq = AutonomousQuarantine::new(QuarantineConfig {
+            infraction_threshold: 1, // ban on 1st infraction
+            quarantine_duration_ms: 1000,
+            max_tracked_subnets: 100,
+        });
+
+        aq.record_and_check("192.168.1.50", 1000);
+        assert_eq!(aq.active_bans_count(), 1);
+        assert!(aq.is_quarantined("192.168.1.99", 1500));
+
+        // At t = 2001ms, ban has expired (1000 + 1000 = 2000)
+        let pruned = aq.purge_expired(2001);
+        assert_eq!(pruned, 1);
+        assert_eq!(aq.active_bans_count(), 0);
+        assert!(!aq.is_quarantined("192.168.1.99", 2001));
     }
 }

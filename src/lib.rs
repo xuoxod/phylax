@@ -22,6 +22,7 @@ pub mod credential_guard;
 pub mod dist_guard;
 pub mod email_guard;
 pub mod honeypot;
+pub mod maintenance;
 pub mod pipeline;
 pub mod pow;
 pub mod session_sentinel;
@@ -33,6 +34,9 @@ pub mod timing;
 pub mod toll_guard;
 pub mod turn_guard;
 
+#[cfg(feature = "abuse-reporting")]
+pub mod abuse_reporting;
+
 pub use adaptive_pow::{AdaptivePowConfig, AdaptivePowEngine, InfractionSeverity};
 pub use autonomous_quarantine::{AutonomousQuarantine, QuarantineConfig};
 pub use cache_shield::{CacheShield, CacheShieldConfig, CacheVerdict, CachedResponse};
@@ -40,6 +44,7 @@ pub use credential_guard::{BreachedPasswordBloomFilter, CredentialGuard, Credent
 pub use dist_guard::{DistGuard, DistGuardConfig, DistVerdict};
 pub use email_guard::{EmailPatternGuard, EmailVerdict};
 pub use honeypot::{HoneypotValidator, HoneypotVerdict};
+pub use maintenance::{MaintenanceManager, MaintenanceReport};
 pub use pipeline::{
     DenialReason, PhylaxClientContext, PhylaxPipeline, PhylaxPipelineBuilder, PhylaxRequest,
     PhylaxVerdict, ShieldClientContext, ShieldPipeline, ShieldPipelineBuilder, ShieldRequest,
@@ -55,6 +60,13 @@ pub use tarpit::{TarpitConfig, TarpitGovernor, TarpitSlotGuard, TarpitVerdict};
 pub use timing::{TimingGuard, TimingVerdict};
 pub use toll_guard::{TollGuard, TollGuardConfig, TollVerdict};
 pub use turn_guard::{TurnCredentials, TurnGuard, TurnGuardConfig, TurnVerdict};
+
+#[cfg(feature = "abuse-reporting")]
+pub use abuse_reporting::{
+    AbuseCategory, AbuseIpDbCheckResponse, AbuseIpDbReportPayload, AbuseIpDbResponse,
+    AbuseReportError, CooldownConfig, DossierFormatter, ForensicDossier, InformantConfig,
+    InformantEngine, InformantVerdict, ReportCooldownGovernor,
+};
 
 /// Universal prelude for convenient drop-in integration
 pub mod prelude {

@@ -109,4 +109,54 @@ impl AdaptivePowEngine {
     pub fn clear_infractions(&self, ip: &str) {
         self.records.write().remove(ip);
     }
+
+    /// Prune infraction records where decay has brought the score back to baseline (0).
+    /// Returns the number of pruned records.
+    pub fn prune_decayed(&self, now_ms: u64) -> usize {
+        let mut records = self.records.write();
+        let before = records.len();
+        records.retain(|_, record| {
+            let elapsed = now_ms.saturating_sub(record.last_infraction_ms);
+            let decay_steps = (elapsed / self.config.infraction_decay_ms) as u32;
+            let effective_score = record.score.saturating_sub(decay_steps);
+            effective_score > 0
+        });
+        before.saturating_sub(records.len())
+    }
+
+    /// Current count of tracked IP infraction records
+    pub fn tracked_ips_count(&self) -> usize {
+        self.records.read().len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_prune_decayed_removes_inactive_ips() {
+        let engine = AdaptivePowEngine::new(AdaptivePowConfig {
+            baseline_difficulty: 10,
+            suspicious_difficulty: 12,
+            hostile_difficulty: 14,
+            severe_difficulty: 16,
+            infraction_decay_ms: 1000,
+        });
+
+        engine.record_infraction("1.1.1.1", InfractionSeverity::Suspicious, 1000); // score 1
+        engine.record_infraction("2.2.2.2", InfractionSeverity::Severe, 1000); // score 3
+
+        assert_eq!(engine.tracked_ips_count(), 2);
+
+        // At t = 2500ms (1.5s elapsed):
+        // 1.1.1.1 decays by 1 step -> score 0 (pruneable)
+        // 2.2.2.2 decays by 1 step -> score 2 (retained)
+        let pruned = engine.prune_decayed(2500);
+        assert_eq!(pruned, 1);
+        assert_eq!(engine.tracked_ips_count(), 1);
+
+        assert_eq!(engine.get_difficulty("1.1.1.1", 2500), 10);
+        assert_eq!(engine.get_difficulty("2.2.2.2", 2500), 14);
+    }
 }

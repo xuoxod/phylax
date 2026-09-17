@@ -172,6 +172,7 @@ fn test_pipeline_fail_fast_execution_order() {
         pow_nonce: Some(0),
         email: Some("clean@rmediatech.com"),
         now_ms: now_ms + 4000,
+        ..Default::default()
     };
     let verdict = pipeline.evaluate(&req_trapped);
     assert!(matches!(
@@ -189,6 +190,7 @@ fn test_pipeline_fail_fast_execution_order() {
         pow_nonce: Some(0),
         email: Some("clean@rmediatech.com"),
         now_ms: now_ms + 4000,
+        ..Default::default()
     };
     let verdict_tor = pipeline.evaluate(&req_tor);
     assert!(matches!(
@@ -205,6 +207,7 @@ fn test_pipeline_fail_fast_execution_order() {
         pow_nonce: Some(0),
         email: Some("clean@rmediatech.com"),
         now_ms: now_ms + 100, // Only 100ms
+        ..Default::default()
     };
     let verdict_fast = pipeline.evaluate(&req_too_fast);
     assert!(matches!(
@@ -222,6 +225,7 @@ fn test_pipeline_fail_fast_execution_order() {
         pow_nonce: Some(pow_nonce),
         email: Some("operator@rmediatech.com"),
         now_ms: now_ms + 3500, // Human took 3.5s
+        ..Default::default()
     };
     let verdict_human = pipeline.evaluate(&req_human);
     assert!(verdict_human.is_allowed());

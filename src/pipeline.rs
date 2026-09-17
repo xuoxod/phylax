@@ -9,6 +9,8 @@ use crate::pow::{PowEngine, PowVerdict};
 use crate::subnet_guard::{SubnetGuard, SubnetVerdict};
 use crate::tarpit::{TarpitConfig, TarpitGovernor};
 use crate::timing::{TimingGuard, TimingVerdict};
+#[cfg(feature = "abuse-reporting")]
+use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 /// Request context submitted for Shield verification
@@ -20,6 +22,9 @@ pub struct ShieldRequest<'a> {
     pub pow_challenge_token: Option<&'a str>,
     pub pow_nonce: Option<u64>,
     pub email: Option<&'a str>,
+    pub target_uri: Option<&'a str>,
+    pub http_method: Option<&'a str>,
+    pub user_agent: Option<&'a str>,
     pub now_ms: u64,
 }
 
@@ -113,6 +118,8 @@ pub struct ShieldPipeline {
     enable_pow: bool,
     enable_timing: bool,
     enable_subnet: bool,
+    #[cfg(feature = "abuse-reporting")]
+    informant: Option<Arc<crate::abuse_reporting::InformantEngine>>,
 }
 
 impl ShieldPipeline {
@@ -134,6 +141,33 @@ impl ShieldPipeline {
     /// Access the Autonomous Quarantine Engine
     pub fn quarantine(&self) -> &AutonomousQuarantine {
         &self.quarantine
+    }
+
+    /// Create a MaintenanceManager bound to this pipeline's live defensive state
+    pub fn maintenance_manager(&self) -> crate::maintenance::MaintenanceManager {
+        crate::maintenance::MaintenanceManager::new(
+            self.quarantine.clone(),
+            self.adaptive_pow.clone(),
+        )
+    }
+
+    /// Execute a maintenance pass directly across this pipeline's defense engines
+    pub fn run_maintenance(&self, now_ms: u64) -> crate::maintenance::MaintenanceReport {
+        self.maintenance_manager().run_maintenance(now_ms)
+    }
+
+    /// Spawn a persistent non-blocking background task running periodic maintenance for this pipeline
+    pub fn spawn_background_maintenance(
+        &self,
+        interval: std::time::Duration,
+    ) -> tokio::task::JoinHandle<()> {
+        self.maintenance_manager().spawn_background_worker(interval)
+    }
+
+    #[cfg(feature = "abuse-reporting")]
+    /// Access the abuse informant engine if configured
+    pub fn informant(&self) -> Option<&Arc<crate::abuse_reporting::InformantEngine>> {
+        self.informant.as_ref()
     }
 
     /// Issue a client context (timing token + PoW challenge + decoy field list)
@@ -202,6 +236,27 @@ impl ShieldPipeline {
                     InfractionSeverity::Severe,
                     req.now_ms,
                 );
+
+                #[cfg(feature = "abuse-reporting")]
+                if let Some(ref informant) = self.informant {
+                    let dossier = crate::abuse_reporting::ForensicDossier {
+                        client_ip: req.client_ip.to_string(),
+                        timestamp_ms: req.now_ms,
+                        target_uri: req.target_uri.unwrap_or("/").to_string(),
+                        http_method: req.http_method.unwrap_or("POST").to_string(),
+                        category: crate::abuse_reporting::AbuseCategory::WebHoneypot,
+                        trapped_field: Some(field_name.clone()),
+                        user_agent: req.user_agent.map(|s| s.to_string()),
+                        evidence_notes: format!(
+                            "Phylax autonomous honeypot trap tripped on hidden decoy field '{}'",
+                            field_name
+                        ),
+                    };
+                    let informant_cloned = informant.clone();
+                    tokio::spawn(async move {
+                        informant_cloned.process_incident(&dossier).await;
+                    });
+                }
             }
             return ShieldVerdict::Deny(DenialReason::HoneypotTrapped { field: field_name });
         }
@@ -327,6 +382,8 @@ pub struct ShieldPipelineBuilder {
     tarpit_config: TarpitConfig,
     adaptive_pow_config: AdaptivePowConfig,
     quarantine_config: QuarantineConfig,
+    #[cfg(feature = "abuse-reporting")]
+    informant: Option<Arc<crate::abuse_reporting::InformantEngine>>,
 }
 
 impl Default for ShieldPipelineBuilder {
@@ -345,6 +402,8 @@ impl Default for ShieldPipelineBuilder {
             tarpit_config: TarpitConfig::default(),
             adaptive_pow_config: AdaptivePowConfig::default(),
             quarantine_config: QuarantineConfig::default(),
+            #[cfg(feature = "abuse-reporting")]
+            informant: None,
         }
     }
 }
@@ -408,6 +467,25 @@ impl ShieldPipelineBuilder {
         self
     }
 
+    #[cfg(feature = "abuse-reporting")]
+    /// Configure autonomous abuse reporting with the provided InformantConfig
+    pub fn with_abuse_reporting(mut self, config: crate::abuse_reporting::InformantConfig) -> Self {
+        self.informant = Some(Arc::new(
+            crate::abuse_reporting::InformantEngine::with_http_transport(config),
+        ));
+        self
+    }
+
+    #[cfg(feature = "abuse-reporting")]
+    /// Attach an existing InformantEngine instance
+    pub fn with_informant_engine(
+        mut self,
+        informant: Arc<crate::abuse_reporting::InformantEngine>,
+    ) -> Self {
+        self.informant = Some(informant);
+        self
+    }
+
     pub fn build(self) -> ShieldPipeline {
         let honeypot = match self.decoy_fields {
             Some(fields) => HoneypotValidator::new(fields),
@@ -438,6 +516,8 @@ impl ShieldPipelineBuilder {
             enable_pow: self.enable_pow,
             enable_timing: self.enable_timing,
             enable_subnet: self.enable_subnet,
+            #[cfg(feature = "abuse-reporting")]
+            informant: self.informant,
         }
     }
 }
