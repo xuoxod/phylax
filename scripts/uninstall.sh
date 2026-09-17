@@ -21,6 +21,12 @@ if command -v systemctl &> /dev/null && systemctl is-active --quiet phylax 2>/de
     echo "Removed systemd service."
 fi
 
+# Remove logrotate configuration if present
+if [ -f "/etc/logrotate.d/phylax" ]; then
+    sudo rm -f "/etc/logrotate.d/phylax"
+    echo "Removed /etc/logrotate.d/phylax"
+fi
+
 # Remove binaries
 if [ -f "/usr/local/bin/phylax" ]; then
     sudo rm -f "/usr/local/bin/phylax"

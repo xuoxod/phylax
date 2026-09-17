@@ -1,0 +1,13 @@
+# /etc/logrotate.d/phylax
+# Automated log rotation for Phylax WAF & Edge Defense Daemon
+/var/log/phylax/*.log {
+    daily
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    create 0640 phylax phylax
+    sharedscripts
+    copytruncate
+}

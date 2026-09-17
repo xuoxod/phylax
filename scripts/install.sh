@@ -47,15 +47,53 @@ if [ -f "Cargo.toml" ] && grep -q 'name = "phylax"' Cargo.toml; then
     cargo build --release --features cli
     cp -f "target/release/phylax" "${BIN_DIR}/phylax"
 else
-    echo -e "🌐 Installing latest release via Cargo from GitHub..."
-    if ! command -v cargo &> /dev/null; then
-        echo -e "${RED}❌ Rust/Cargo is required for source installation.${NC}"
-        echo -e "   Please install Rust via https://rustup.rs or install a prebuilt binary."
-        exit 1
+    INSTALLED=0
+    # Attempt to download prebuilt binary from GitHub Releases
+    if command -v curl &> /dev/null; then
+        echo -e "🌐 Checking for prebuilt release asset on GitHub..."
+        TARGET=""
+        case "${OS}" in
+            Linux)
+                case "${ARCH}" in
+                    x86_64) TARGET="x86_64-unknown-linux-gnu" ;;
+                    aarch64|arm64) TARGET="aarch64-unknown-linux-gnu" ;;
+                esac
+                ;;
+            Darwin)
+                case "${ARCH}" in
+                    x86_64) TARGET="x86_64-apple-darwin" ;;
+                    arm64|aarch64) TARGET="aarch64-apple-darwin" ;;
+                esac
+                ;;
+        esac
+
+        if [ -n "${TARGET}" ]; then
+            RELEASE_URL="https://github.com/xuoxod/phylax/releases/latest/download/phylax-${TARGET}.tar.gz"
+            TMP_DIR="$(mktemp -d)"
+            if curl -sSLf "${RELEASE_URL}" -o "${TMP_DIR}/phylax.tar.gz" 2>/dev/null; then
+                echo -e "📦 Extracting prebuilt binary (${TARGET})..."
+                tar -xzf "${TMP_DIR}/phylax.tar.gz" -C "${TMP_DIR}"
+                if [ -f "${TMP_DIR}/phylax" ]; then
+                    cp -f "${TMP_DIR}/phylax" "${BIN_DIR}/phylax"
+                    INSTALLED=1
+                fi
+            fi
+            rm -rf "${TMP_DIR}"
+        fi
     fi
-    cargo install --git https://github.com/xuoxod/phylax.git --features cli --root "${BIN_DIR}/.."
-    if [ -f "${BIN_DIR}/../bin/phylax" ]; then
-        mv -f "${BIN_DIR}/../bin/phylax" "${BIN_DIR}/phylax"
+
+    # Fallback to Cargo if prebuilt release not found or failed
+    if [ "${INSTALLED}" -eq 0 ]; then
+        if ! command -v cargo &> /dev/null; then
+            echo -e "${RED}❌ Neither prebuilt binary nor Rust/Cargo was found.${NC}"
+            echo -e "   Please install Rust via https://rustup.rs to compile from source."
+            exit 1
+        fi
+        echo -e "📦 Building and installing via Cargo from GitHub..."
+        cargo install --git https://github.com/xuoxod/phylax.git --features cli --root "${BIN_DIR}/.."
+        if [ -f "${BIN_DIR}/../bin/phylax" ]; then
+            mv -f "${BIN_DIR}/../bin/phylax" "${BIN_DIR}/phylax"
+        fi
     fi
 fi
 
@@ -100,6 +138,31 @@ EOF
     echo -e "${GREEN}✅ systemd service registered.${NC}"
     echo -e "   To start and enable on boot:"
     echo -e "     ${BOLD}systemctl enable --now phylax${NC}"
+fi
+
+# Provision logrotate configuration if running as root on Linux
+if [ "$(id -u)" -eq 0 ] && [ -d "/etc/logrotate.d" ]; then
+    echo -e "🔄 Configuring logrotate maintenance..."
+    mkdir -p "/var/log/phylax"
+    if [ -f "scripts/phylax.logrotate" ]; then
+        cp -f "scripts/phylax.logrotate" "/etc/logrotate.d/phylax"
+    else
+        cat << 'EOF' > /etc/logrotate.d/phylax
+/var/log/phylax/*.log {
+    daily
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    create 0640 phylax phylax
+    sharedscripts
+    copytruncate
+}
+EOF
+    fi
+    chmod 644 "/etc/logrotate.d/phylax"
+    echo -e "${GREEN}✅ /etc/logrotate.d/phylax provisioned.${NC}"
 fi
 
 # Ensure PATH includes installation directory

@@ -88,7 +88,7 @@ mod tests {
     fn test_subnet_guard_allows_residential_ip() {
         let guard = SubnetGuard::default();
         // Common residential US IP
-        assert_eq!(guard.check_ip("74.7.241.62"), SubnetVerdict::Allowed);
+        assert_eq!(guard.check_ip("198.51.100.62"), SubnetVerdict::Allowed);
         // Loopback
         assert_eq!(guard.check_ip("127.0.0.1"), SubnetVerdict::Allowed);
     }

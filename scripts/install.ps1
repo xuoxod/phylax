@@ -18,24 +18,39 @@ Write-Host "
   Sovereign Zero-Telemetry WAF & Edge Defense Daemon
 " -ForegroundColor Cyan
 
-# Check if Rust/Cargo is installed
-if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-    Write-Error "Rust/Cargo is required to install Phylax on Windows. Please install from https://rustup.rs"
-    exit 1
-}
-
 # Create installation directory if missing
 if (-not (Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 }
 
-Write-Host "📦 Installing Phylax binary with CLI features..." -ForegroundColor Green
+$Installed = $false
+if (-not (Test-Path "Cargo.toml")) {
+    $ReleaseUrl = "https://github.com/xuoxod/phylax/releases/latest/download/phylax-x86_64-pc-windows-msvc.zip"
+    $ZipPath = "$env:TEMP\phylax.zip"
+    try {
+        Write-Host "🌐 Attempting to download prebuilt binary release from GitHub..." -ForegroundColor Cyan
+        Invoke-WebRequest -Uri $ReleaseUrl -OutFile $ZipPath -UseBasicParsing -ErrorAction Stop
+        Expand-Archive -Path $ZipPath -DestinationPath $InstallDir -Force
+        Remove-Item $ZipPath -Force
+        $Installed = $true
+    } catch {
+        Write-Host "Prebuilt release not found or network unavailable; falling back to Cargo source build..." -ForegroundColor Yellow
+    }
+}
 
-if (Test-Path "Cargo.toml") {
-    cargo build --release --features cli
-    Copy-Item "target\release\phylax.exe" "$InstallDir\phylax.exe" -Force
-} else {
-    cargo install --git https://github.com/xuoxod/phylax.git --features cli
+if (-not $Installed) {
+    if (Test-Path "Cargo.toml") {
+        Write-Host "📦 Building from local repository source..." -ForegroundColor Green
+        cargo build --release --features cli
+        Copy-Item "target\release\phylax.exe" "$InstallDir\phylax.exe" -Force
+    } else {
+        if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+            Write-Error "Neither prebuilt release nor Rust/Cargo was found. Please install Rust from https://rustup.rs"
+            exit 1
+        }
+        Write-Host "📦 Installing via Cargo from GitHub..." -ForegroundColor Green
+        cargo install --git https://github.com/xuoxod/phylax.git --features cli
+    }
 }
 
 Write-Host "✅ Installed: $InstallDir\phylax.exe" -ForegroundColor Green

@@ -73,7 +73,7 @@ fn test_simulator_speed_demon_crawlers_rejected_by_timing() {
     ];
 
     let req = ShieldRequest {
-        client_ip: "74.7.241.62",
+        client_ip: "198.51.100.62",
         submitted_fields: &clean_fields,
         timing_token: Some(&client_ctx.timing_token),
         pow_challenge_token: Some(&client_ctx.pow_challenge),
@@ -138,7 +138,7 @@ fn test_simulator_pow_puzzle_tampering_and_replay_attacks() {
 
     // 1. Bot omits PoW nonce (submits 0 or None)
     let req_no_nonce = ShieldRequest {
-        client_ip: "74.7.241.62",
+        client_ip: "198.51.100.62",
         submitted_fields: &clean_fields,
         timing_token: Some(&client_ctx.timing_token),
         pow_challenge_token: Some(&client_ctx.pow_challenge),
@@ -154,7 +154,7 @@ fn test_simulator_pow_puzzle_tampering_and_replay_attacks() {
 
     // 2. Legitimate request with solved nonce passes
     let req_valid = ShieldRequest {
-        client_ip: "74.7.241.62",
+        client_ip: "198.51.100.62",
         submitted_fields: &clean_fields,
         timing_token: Some(&client_ctx.timing_token),
         pow_challenge_token: Some(&client_ctx.pow_challenge),
@@ -195,7 +195,7 @@ fn test_simulator_legitimate_human_operator_end_to_end() {
     ];
 
     let req = ShieldRequest {
-        client_ip: "74.7.241.62",
+        client_ip: "198.51.100.62",
         submitted_fields: &human_fields,
         timing_token: Some(&client_ctx.timing_token),
         pow_challenge_token: Some(&client_ctx.pow_challenge),
@@ -374,7 +374,7 @@ fn test_simulator_session_hijacking_and_impossible_travel() {
     let token = sentinel.generate_binding_token(session_id, legitimate_ip, browser_ua);
 
     // Scenario A: Attacker sniffs cookie/token and replays it from a datacenter IP
-    let hijacked_verdict = sentinel.verify_binding(session_id, "45.33.32.156", browser_ua, &token);
+    let hijacked_verdict = sentinel.verify_binding(session_id, "203.0.113.156", browser_ua, &token);
     assert!(matches!(
         hijacked_verdict,
         phylax::session_sentinel::SessionVerdict::FingerprintMismatch { .. }

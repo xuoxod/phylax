@@ -142,7 +142,7 @@ async fn test_pipeline_honeypot_triggers_asynchronous_abuse_reporting() {
 
     // Clean request - should NOT trigger report
     let clean_req = ShieldRequest {
-        client_ip: "96.227.137.21",
+        client_ip: "198.51.100.21",
         submitted_fields: &[("username".to_string(), "alice".to_string())],
         now_ms,
         ..Default::default()

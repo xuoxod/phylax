@@ -122,7 +122,7 @@ fn test_layer5_subnet_guard_against_captured_threat_intel() {
 
     // 1. Residential & corporate IPs allowed
     assert_eq!(
-        guard.check_ip("74.7.241.62"),
+        guard.check_ip("198.51.100.62"),
         phylax::SubnetVerdict::Allowed
     );
     assert_eq!(
@@ -165,7 +165,7 @@ fn test_pipeline_fail_fast_execution_order() {
         ("website_url".to_string(), "http://bot.com".to_string()),
     ];
     let req_trapped = ShieldRequest {
-        client_ip: "74.7.241.62",
+        client_ip: "198.51.100.62",
         submitted_fields: &trapped_fields,
         timing_token: Some(&client_ctx.timing_token),
         pow_challenge_token: Some(&client_ctx.pow_challenge),
@@ -200,7 +200,7 @@ fn test_pipeline_fail_fast_execution_order() {
 
     // 3. Timing check triggers on Step 4
     let req_too_fast = ShieldRequest {
-        client_ip: "74.7.241.62",
+        client_ip: "198.51.100.62",
         submitted_fields: &clean_fields,
         timing_token: Some(&client_ctx.timing_token),
         pow_challenge_token: Some(&client_ctx.pow_challenge),
@@ -218,7 +218,7 @@ fn test_pipeline_fail_fast_execution_order() {
     // 4. Fully compliant human operator passes all layers
     let (pow_nonce, _) = PowEngine::solve_challenge(&client_ctx.pow_seed, 8);
     let req_human = ShieldRequest {
-        client_ip: "74.7.241.62",
+        client_ip: "198.51.100.62",
         submitted_fields: &clean_fields,
         timing_token: Some(&client_ctx.timing_token),
         pow_challenge_token: Some(&client_ctx.pow_challenge),
