@@ -80,6 +80,16 @@ impl PowEngine {
 
     /// Issue a new cryptographic challenge token for client-side solving
     pub fn issue_challenge(&self, now_ms: u64, seed_nonce: u64) -> (String, String) {
+        self.issue_challenge_with_difficulty(now_ms, seed_nonce, self.difficulty_bits)
+    }
+
+    /// Issue a challenge token with dynamically specified difficulty (e.g. adaptive ratcheting)
+    pub fn issue_challenge_with_difficulty(
+        &self,
+        now_ms: u64,
+        seed_nonce: u64,
+        difficulty_bits: u8,
+    ) -> (String, String) {
         // Derive unique seed from timestamp + random seed nonce
         let mut hasher = Sha256::new();
         hasher.update(b"RMT_POW_SEED:");
@@ -88,7 +98,7 @@ impl PowEngine {
         let seed = hex::encode(hasher.finalize());
 
         let expires_at = now_ms + self.expiration_ms;
-        let payload = format!("{}:{}:{}", seed, self.difficulty_bits, expires_at);
+        let payload = format!("{}:{}:{}", seed, difficulty_bits, expires_at);
         let sig = self.compute_hmac(payload.as_bytes());
         let full_token = format!("{}:{}", payload, sig);
         let encoded_token = B64.encode(full_token.as_bytes());

@@ -1,10 +1,13 @@
 //! # Radical OJP: Composable Fail-Fast Shield Pipeline
 //! Single Job: Chain all isolated defense layers into a unified, zero-overhead pipeline.
 
+use crate::adaptive_pow::{AdaptivePowConfig, AdaptivePowEngine, InfractionSeverity};
+use crate::autonomous_quarantine::{AutonomousQuarantine, QuarantineConfig};
 use crate::email_guard::{EmailPatternGuard, EmailVerdict};
 use crate::honeypot::{HoneypotValidator, HoneypotVerdict};
 use crate::pow::{PowEngine, PowVerdict};
 use crate::subnet_guard::{SubnetGuard, SubnetVerdict};
+use crate::tarpit::{TarpitConfig, TarpitGovernor};
 use crate::timing::{TimingGuard, TimingVerdict};
 use serde::{Deserialize, Serialize};
 
@@ -104,6 +107,9 @@ pub struct ShieldPipeline {
     pow: PowEngine,
     email_guard: EmailPatternGuard,
     subnet_guard: SubnetGuard,
+    tarpit: TarpitGovernor,
+    adaptive_pow: AdaptivePowEngine,
+    quarantine: AutonomousQuarantine,
     enable_pow: bool,
     enable_timing: bool,
     enable_subnet: bool,
@@ -115,16 +121,48 @@ impl ShieldPipeline {
         ShieldPipelineBuilder::default()
     }
 
+    /// Access the Tarpit Governor
+    pub fn tarpit(&self) -> &TarpitGovernor {
+        &self.tarpit
+    }
+
+    /// Access the Adaptive PoW Engine
+    pub fn adaptive_pow(&self) -> &AdaptivePowEngine {
+        &self.adaptive_pow
+    }
+
+    /// Access the Autonomous Quarantine Engine
+    pub fn quarantine(&self) -> &AutonomousQuarantine {
+        &self.quarantine
+    }
+
     /// Issue a client context (timing token + PoW challenge + decoy field list)
     pub fn issue_client_context(&self, now_ms: u64, seed_nonce: u64) -> ShieldClientContext {
+        self.issue_client_context_for_ip("", now_ms, seed_nonce)
+    }
+
+    /// Issue an adaptive client context with dynamic PoW difficulty scaled by client IP threat score
+    pub fn issue_client_context_for_ip(
+        &self,
+        ip: &str,
+        now_ms: u64,
+        seed_nonce: u64,
+    ) -> ShieldClientContext {
         let timing_token = self.timing.generate_token(now_ms);
-        let (pow_seed, pow_challenge) = self.pow.issue_challenge(now_ms, seed_nonce);
+        let difficulty = if ip.is_empty() {
+            self.pow.difficulty_bits()
+        } else {
+            self.adaptive_pow.get_difficulty(ip, now_ms) as u8
+        };
+        let (pow_seed, pow_challenge) = self
+            .pow
+            .issue_challenge_with_difficulty(now_ms, seed_nonce, difficulty);
 
         ShieldClientContext {
             timing_token,
             pow_challenge,
             pow_seed,
-            pow_difficulty: self.pow.difficulty_bits(),
+            pow_difficulty: difficulty,
             decoy_fields: self.honeypot.decoy_fields().to_vec(),
         }
     }
@@ -146,9 +184,25 @@ impl ShieldPipeline {
         require_timing: bool,
         require_pow: bool,
     ) -> ShieldVerdict {
+        // 0. Layer 0: Autonomous Quarantine Check (~10ns)
+        if !req.client_ip.is_empty() && self.quarantine.is_quarantined(req.client_ip, req.now_ms) {
+            return ShieldVerdict::Deny(DenialReason::SubnetBlocked {
+                ip: req.client_ip.to_string(),
+                cidr: "autonomous_quarantine".to_string(),
+            });
+        }
+
         // 1. Layer 1: Honeypot Check (~5ns)
         let hp_verdict = self.honeypot.validate(req.submitted_fields);
         if let HoneypotVerdict::Trapped { field_name, .. } = hp_verdict {
+            if !req.client_ip.is_empty() {
+                self.quarantine.record_and_check(req.client_ip, req.now_ms);
+                self.adaptive_pow.record_infraction(
+                    req.client_ip,
+                    InfractionSeverity::Severe,
+                    req.now_ms,
+                );
+            }
             return ShieldVerdict::Deny(DenialReason::HoneypotTrapped { field: field_name });
         }
 
@@ -156,6 +210,11 @@ impl ShieldPipeline {
         if self.enable_subnet && !req.client_ip.is_empty() {
             let subnet_verdict = self.subnet_guard.check_ip(req.client_ip);
             if let SubnetVerdict::Blocked { ip, matched_cidr } = subnet_verdict {
+                self.adaptive_pow.record_infraction(
+                    req.client_ip,
+                    InfractionSeverity::Hostile,
+                    req.now_ms,
+                );
                 return ShieldVerdict::Deny(DenialReason::SubnetBlocked {
                     ip,
                     cidr: matched_cidr,
@@ -265,6 +324,9 @@ pub struct ShieldPipelineBuilder {
     enable_pow: bool,
     enable_timing: bool,
     enable_subnet: bool,
+    tarpit_config: TarpitConfig,
+    adaptive_pow_config: AdaptivePowConfig,
+    quarantine_config: QuarantineConfig,
 }
 
 impl Default for ShieldPipelineBuilder {
@@ -280,6 +342,9 @@ impl Default for ShieldPipelineBuilder {
             enable_pow: true,
             enable_timing: true,
             enable_subnet: true,
+            tarpit_config: TarpitConfig::default(),
+            adaptive_pow_config: AdaptivePowConfig::default(),
+            quarantine_config: QuarantineConfig::default(),
         }
     }
 }
@@ -313,6 +378,21 @@ impl ShieldPipelineBuilder {
         self
     }
 
+    pub fn with_tarpit(mut self, config: TarpitConfig) -> Self {
+        self.tarpit_config = config;
+        self
+    }
+
+    pub fn with_adaptive_pow(mut self, config: AdaptivePowConfig) -> Self {
+        self.adaptive_pow_config = config;
+        self
+    }
+
+    pub fn with_quarantine(mut self, config: QuarantineConfig) -> Self {
+        self.quarantine_config = config;
+        self
+    }
+
     pub fn enable_pow(mut self, enabled: bool) -> Self {
         self.enable_pow = enabled;
         self
@@ -342,6 +422,9 @@ impl ShieldPipelineBuilder {
         );
         let email_guard = EmailPatternGuard::new(self.max_email_dots);
         let subnet_guard = SubnetGuard::default();
+        let tarpit = TarpitGovernor::new(self.tarpit_config);
+        let adaptive_pow = AdaptivePowEngine::new(self.adaptive_pow_config);
+        let quarantine = AutonomousQuarantine::new(self.quarantine_config);
 
         ShieldPipeline {
             honeypot,
@@ -349,6 +432,9 @@ impl ShieldPipelineBuilder {
             pow,
             email_guard,
             subnet_guard,
+            tarpit,
+            adaptive_pow,
+            quarantine,
             enable_pow: self.enable_pow,
             enable_timing: self.enable_timing,
             enable_subnet: self.enable_subnet,
@@ -356,9 +442,8 @@ impl ShieldPipelineBuilder {
     }
 }
 
-// Universal Aliases for `phylax`
-pub type PhylaxRequest<'a> = ShieldRequest<'a>;
-pub type PhylaxClientContext = ShieldClientContext;
-pub type PhylaxVerdict = ShieldVerdict;
 pub type PhylaxPipeline = ShieldPipeline;
 pub type PhylaxPipelineBuilder = ShieldPipelineBuilder;
+pub type PhylaxRequest<'a> = ShieldRequest<'a>;
+pub type PhylaxVerdict = ShieldVerdict;
+pub type PhylaxClientContext = ShieldClientContext;

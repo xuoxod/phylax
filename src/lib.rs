@@ -1,6 +1,6 @@
-//! # `phylax` (φύλαξ) — Sovereign 12-Layer Edge Defense Engine
+//! # Sovereign Anti-Bot & Threat Neutralization Engine (`rmt-shield`)
 //!
-//! Ultra-high-throughput, zero-telemetry, memory-safe defense suite for enterprise edge architectures.
+//! High-throughput, zero-telemetry, memory-safe defense suite for enterprise edge architectures.
 //! Enforces:
 //! 1. Cryptographic Honeypot Traps (`honeypot`)
 //! 2. Tamper-Proof HMAC Submission Timing Defense (`timing`)
@@ -15,6 +15,8 @@
 //! 11. L7 Stream & Slowloris Protection Guard (`stream_guard`)
 //! 12. Zero-Lock In-Memory Cache Shield (`cache_shield`)
 
+pub mod adaptive_pow;
+pub mod autonomous_quarantine;
 pub mod cache_shield;
 pub mod credential_guard;
 pub mod dist_guard;
@@ -25,11 +27,14 @@ pub mod pow;
 pub mod session_sentinel;
 pub mod stream_guard;
 pub mod subnet_guard;
+pub mod tarpit;
 pub mod threat_intel;
 pub mod timing;
 pub mod toll_guard;
 pub mod turn_guard;
 
+pub use adaptive_pow::{AdaptivePowConfig, AdaptivePowEngine, InfractionSeverity};
+pub use autonomous_quarantine::{AutonomousQuarantine, QuarantineConfig};
 pub use cache_shield::{CacheShield, CacheShieldConfig, CacheVerdict, CachedResponse};
 pub use credential_guard::{BreachedPasswordBloomFilter, CredentialGuard, CredentialVerdict};
 pub use dist_guard::{DistGuard, DistGuardConfig, DistVerdict};
@@ -46,6 +51,7 @@ pub use session_sentinel::{
 };
 pub use stream_guard::{RouteCategory, StreamGuard, StreamGuardConfig, StreamVerdict};
 pub use subnet_guard::{SubnetGuard, SubnetVerdict};
+pub use tarpit::{TarpitConfig, TarpitGovernor, TarpitSlotGuard, TarpitVerdict};
 pub use timing::{TimingGuard, TimingVerdict};
 pub use toll_guard::{TollGuard, TollGuardConfig, TollVerdict};
 pub use turn_guard::{TurnCredentials, TurnGuard, TurnGuardConfig, TurnVerdict};
