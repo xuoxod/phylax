@@ -30,28 +30,28 @@ flowchart LR
         LEECH["⚡ WebRTC Bandwidth Leechers"]
     end
 
-    subgraph MatrixEdge["matrix.rmediatech.com Edge Node"]
-        CADDY["Caddy Reverse Proxy (TLS Termination)"]
+    subgraph MatrixEdge["Collaborative Edge Node"]
+        PROXY["TLS Edge Termination (Reverse Proxy)"]
         
-        subgraph AxumProcess["Matrix Axum Process (In-Memory)"]
+        subgraph AxumProcess["Application Process (In-Memory)"]
             PHYLAX["🛡️ Embedded Phylax Pipeline<br/>(<950ns Chained Evaluation)"]
-            AUTH["Auth Handler<br/>(Register / Login)"]
+            AUTH["Auth Handlers<br/>(Register / Login)"]
             MEDIA["WebRTC / SFU<br/>(TurnGuard)"]
-            DB[(SQLite WAL DB)]
+            DB[(Persistent State DB)]
         end
     end
 
-    BOT --> CADDY
-    CRAWLER --> CADDY
-    LEECH --> CADDY
-    CADDY --> PHYLAX
+    BOT --> PROXY
+    CRAWLER --> PROXY
+    LEECH --> PROXY
+    PROXY --> PHYLAX
     PHYLAX -- Human Pass --> AUTH
     PHYLAX -- Human Pass --> MEDIA
     AUTH --> DB
 ```
 
 ### Threat Vectors Faced:
-1. **Automated Registration Floods:** Hostile credential-harvesting bots attempting to spam account registrations (`POST /api/v1/auth/register`) to exhaust SQLite WAL write transactions.
+1. **Automated Registration Floods:** Hostile credential-harvesting bots attempting to spam account registrations (`POST /api/v1/auth/register`) to exhaust database write transactions.
 2. **Credential Stuffing on Login:** Distributed brute-force attacks against user authentication endpoints (`POST /api/v1/auth/login`).
 3. **Bandwidth Leeching on Coturn Relays:** Scanners attempting to discover and abuse open WebRTC TURN credentials to proxy unrelated high-bandwidth traffic.
 4. **Targeted Reconnaissance:** Attackers using HTTP `403` and `429` responses to map active defenses and rotate residential proxy pools.
@@ -60,7 +60,7 @@ flowchart LR
 
 ## 3. The In-Process Phylax Solution
 
-Matrix integrated `phylax` natively within its core Axum application state (`crates/matrix-server/src/middleware/phylax.rs`) with **zero external daemons**.
+The platform integrated `phylax` natively within its core Axum application state with **zero external daemons**.
 
 ### 1. The Deceptive Black Hole on Registrations
 Rather than tipping off automated scripts with an explicit rejection, Matrix implemented the **Deceptive Black Hole** in its registration handler:

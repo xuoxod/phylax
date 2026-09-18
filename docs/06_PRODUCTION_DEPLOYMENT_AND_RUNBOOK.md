@@ -24,7 +24,7 @@ When deploying behind a frontend TLS terminator such as **Caddy**, ensure client
 ### Caddyfile Configuration (`/etc/caddy/Caddyfile`)
 
 ```caddyfile
-matrix.rmediatech.com {
+app.example.com {
     encode zstd gzip
 
     # Preserve real client IP for Phylax edge evaluation
