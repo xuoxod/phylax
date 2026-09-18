@@ -70,6 +70,8 @@ pub use abuse_reporting::{
 
 /// Universal prelude for convenient drop-in integration
 pub mod prelude {
+    pub use crate::adaptive_pow::{AdaptivePowConfig, AdaptivePowEngine, InfractionSeverity};
+    pub use crate::autonomous_quarantine::{AutonomousQuarantine, QuarantineConfig};
     pub use crate::cache_shield::CacheShield;
     pub use crate::credential_guard::{BreachedPasswordBloomFilter, CredentialGuard};
     pub use crate::dist_guard::DistGuard;

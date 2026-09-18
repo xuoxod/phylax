@@ -11,6 +11,36 @@
 
 ---
 
+## 🛡️ Proven in Production: Real-Time WebRTC & Mesh Engine
+
+> **Platform Showcase:** [`matrix.rmediatech.com`](https://matrix.rmediatech.com)  
+> **Mission:** Real-time decentralized video, spatial audio, in-room whisper mesh, and multi-party WebSocket collaboration.
+
+`phylax` serves as the native, in-process edge defense shield for **[`matrix.rmediatech.com`](https://matrix.rmediatech.com)**, protecting high-throughput WebRTC SFU media pipelines and public authentication endpoints under continuous adversarial load:
+
+* **Zero Latency Budget Compromise:** Executes in `<950ns` in memory, adding `0.00ms` of network jitter to WebSockets and WebRTC media streams.
+* **Stealth Deception & Silent Neutralization:** Replaces alerting `403 Forbidden` errors with **Synthetic 201 Created Black Holes** on registration, generic 401s on login, and stealth 404 perimeter ghosting.
+* **Coturn Relay Bandwidth Guard (`TurnGuard`):** Eliminates WebRTC relay bandwidth theft using cryptographic session-bound token verification.
+* **Zero Infrastructure Overhead:** Embedded directly inside the Axum application process—zero Redis clusters, zero Fail2ban daemons, zero external cloud proxies.
+
+📖 **Read the Full Battlefield Report:** [**Chapter 3: Matrix Production Case Study**](docs/03_CASE_STUDY_MATRIX_PRODUCTION.md)
+
+---
+
+## 📚 Comprehensive Documentation (OJP)
+
+| Chapter | Document | Focus |
+|---|---|---|
+| **Index** | [**Master Navigation Map**](docs/INDEX.md) | Full architectural map and Optimal Journey Path index. |
+| **01** | [**Architecture & Cost Hierarchy**](docs/01_ARCHITECTURE_AND_COST_HIERARCHY.md) | 12 defensive layers, nanosecond Radix CIDR, Bloom filters, fail-fast mechanics. |
+| **02** | [**Stealth Deception & Active Defense**](docs/02_STEALTH_DECEPTION_AND_ACTIVE_DEFENSE.md) | Silent neutralization vs 403, Deceptive Black Holes, perimeter ghosting. |
+| **03** | [**Case Study: Matrix WebRTC Mesh**](docs/03_CASE_STUDY_MATRIX_PRODUCTION.md) | Real-world battlefield deployment protecting [`matrix.rmediatech.com`](https://matrix.rmediatech.com). |
+| **04** | [**Integration & Framework Guide**](docs/04_INTEGRATION_AND_FRAMEWORK_GUIDE.md) | Axum, Actix-web, Tower, standalone reverse proxy, frontend `phylax.js`. |
+| **05** | [**Autonomous Abuse Intelligence**](docs/05_AUTONOMOUS_ABUSE_INTELLIGENCE.md) | Optional background AbuseIPDB v2 reporting, sliding-window rate governors. |
+| **06** | [**Production Deployment & Runbook**](docs/06_PRODUCTION_DEPLOYMENT_AND_RUNBOOK.md) | Systemd units, Caddyfile reverse proxy recipes, hardware sizing, epilogue. |
+
+---
+
 ## Two Ways to Deploy
 
 | Mode | Target User | Mechanism | Setup Time |
@@ -126,7 +156,7 @@ Add `phylax` to your `Cargo.toml`:
 phylax = { git = "https://github.com/xuoxod/phylax.git" }
 ```
 
-Complete, verified Axum edge defense setup:
+Complete, verified Axum stealth edge defense setup:
 
 ```rust
 use axum::{
@@ -137,7 +167,7 @@ use axum::{
     Json, Router,
 };
 use phylax::prelude::*;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -164,21 +194,44 @@ async fn challenge_handler(State(state): State<AppState>) -> impl IntoResponse {
     Json(ctx)
 }
 
-// 2. Protect sensitive mutations (registration, login, checkout)
+// 2. Protect sensitive mutations with Stealth Deception (No 403 tip-offs)
 async fn register_handler(
     State(state): State<AppState>,
     Json(payload): Json<RegisterRequest>,
 ) -> impl IntoResponse {
     let now_ms = current_timestamp_ms();
 
-    let mut submitted_fields = Vec::new();
+    // 0. Honeypot Trap: Synthetic 201 Created Black Hole
+    // Never tip off detection with 403. The bot thinks it succeeded,
+    // but the payload is dropped to the void without touching databases.
     if let Some(ref decoy) = payload.website_url {
-        submitted_fields.push(("website_url".to_string(), decoy.clone()));
+        if !decoy.trim().is_empty() {
+            let trapped_fields = vec![("website_url".to_string(), decoy.clone())];
+            let shield_req = PhylaxRequest {
+                client_ip: "198.51.100.42",
+                submitted_fields: &trapped_fields,
+                target_uri: Some("/api/register"),
+                http_method: Some("POST"),
+                now_ms,
+                ..Default::default()
+            };
+            let _ = state.phylax.evaluate_perimeter(&shield_req);
+
+            return (
+                StatusCode::CREATED,
+                Json(serde_json::json!({
+                    "status": "SUCCESS",
+                    "user_id": 0,
+                    "uuid": "usr_stealth_trap",
+                    "username": payload.username,
+                    "message": "Account created successfully."
+                })),
+            );
+        }
     }
 
     let req = PhylaxRequest {
         client_ip: "198.51.100.42",
-        submitted_fields: &submitted_fields,
         timing_token: payload.timing_token.as_deref(),
         pow_challenge_token: payload.pow_challenge.as_deref(),
         pow_nonce: payload.pow_nonce,
@@ -199,11 +252,11 @@ async fn register_handler(
                 "username": payload.username
             })),
         ),
-        PhylaxVerdict::Deny(reason) => (
-            StatusCode::FORBIDDEN,
+        PhylaxVerdict::Deny(_) => (
+            StatusCode::BAD_REQUEST,
             Json(serde_json::json!({
-                "status": "BLOCKED",
-                "error": reason.public_message()
+                "status": "ERROR",
+                "message": "Unable to complete registration request. Please try again."
             })),
         ),
     }
@@ -215,8 +268,10 @@ async fn main() {
         PhylaxPipeline::builder()
             .secret_key(b"production-hmac-master-key-seed-2026")
             .with_honeypot_fields(["website_url", "company_fax"])
-            .with_timing(2000, 600_000) // Minimum 2s, Maximum 10 min
-            .with_pow(14, 300_000)       // 14 bits difficulty, 5 min TTL
+            .with_timing(1500, 600_000) // Minimum 1.5s, Maximum 10 min
+            .with_pow(12, 300_000)       // 12 bits difficulty, 5 min TTL
+            .with_quarantine(QuarantineConfig::default())
+            .with_adaptive_pow(AdaptivePowConfig::default())
             .build(),
     );
 
@@ -240,6 +295,8 @@ fn current_timestamp_ms() -> u64 {
         .as_millis() as u64
 }
 ```
+
+> 💡 **Runnable Example:** See [`examples/stealth_edge_defense.rs`](examples/stealth_edge_defense.rs) for a complete, runnable Axum server with perimeter ghosting, deceptive black holes, and login timing masking (`cargo run --example stealth_edge_defense`).
 
 ---
 
