@@ -11,14 +11,14 @@ NC='\033[0m'
 
 echo -e "${BOLD}🧹 Phylax Uninstaller${NC}"
 
-# Stop and remove systemd service if present
-if command -v systemctl &> /dev/null && systemctl is-active --quiet phylax 2>/dev/null; then
-    echo "Stopping phylax systemd service..."
-    sudo systemctl stop phylax
-    sudo systemctl disable phylax
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -x "${SCRIPT_DIR}/phylax-service.sh" ]; then
+    "${SCRIPT_DIR}/phylax-service.sh" uninstall 2>/dev/null || true
+elif command -v systemctl &> /dev/null; then
+    sudo systemctl stop phylax 2>/dev/null || true
+    sudo systemctl disable phylax 2>/dev/null || true
     sudo rm -f /etc/systemd/system/phylax.service
-    sudo systemctl daemon-reload
-    echo "Removed systemd service."
+    sudo systemctl daemon-reload 2>/dev/null || true
 fi
 
 # Remove logrotate configuration if present

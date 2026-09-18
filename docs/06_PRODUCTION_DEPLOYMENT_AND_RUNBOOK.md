@@ -45,17 +45,50 @@ app.example.com {
 
 ---
 
-## 3. Systemd Service Unit (Standalone WAF Mode)
+## 3. Universal Service Management (Distro-Agnostic)
 
-When running `phylax` as a standalone reverse proxy daemon in `/usr/local/bin/phylax`:
+Phylax provides a universal, POSIX-compliant service lifecycle manager at [`scripts/phylax-service.sh`](../scripts/phylax-service.sh) that works across **any Linux distribution** (Ubuntu, Debian, Fedora, RHEL, CentOS, Arch, Alpine Linux, Gentoo).
 
-Create `/etc/systemd/system/phylax.service`:
+It automatically detects your host's init system:
+- **`systemd`** (Ubuntu, Debian, Fedora, Arch, RHEL, Rocky, openSUSE)
+- **`OpenRC`** (Alpine Linux, Gentoo)
+- **`SysVinit`** (Debian/CentOS legacy fallback)
+
+### Automated Service Management Commands
+
+```bash
+# 1. Install & register the service (creates user, unit files, and enables on boot)
+sudo ./scripts/phylax-service.sh install
+
+# 2. Check service health, active PID, and live journal logs
+sudo ./scripts/phylax-service.sh status
+
+# 3. Start, stop, or restart the service
+sudo ./scripts/phylax-service.sh start
+sudo ./scripts/phylax-service.sh stop
+sudo ./scripts/phylax-service.sh restart
+
+# 4. Reset service (flushes transient logs/state and restarts cleanly)
+sudo ./scripts/phylax-service.sh reset
+
+# 5. Cleanly uninstall & unregister service files
+sudo ./scripts/phylax-service.sh uninstall
+```
+
+> 🧪 **Rigorous Verification:** The service manager is verified by a 30-tier POSIX compliance TDD test suite ([`scripts/tests/phylax_service_tdd.sh`](../scripts/tests/phylax_service_tdd.sh)) guaranteeing zero bashisms and complete portability across `sh`, `ash` (BusyBox), `dash`, and `bash`.
+
+---
+
+### Manual Systemd Service Unit Template (Optional)
+
+If you prefer to configure systemd manually without the automated script, create `/etc/systemd/system/phylax.service`:
 
 ```ini
 [Unit]
 Description=Phylax Sovereign Edge Defense Proxy Daemon
 After=network.target network-online.target
 Wants=network-online.target
+Documentation=https://github.com/xuoxod/phylax
 
 [Service]
 Type=simple
@@ -68,10 +101,12 @@ LimitNOFILE=65535
 StandardOutput=journal
 StandardError=journal
 
-# Security Sandboxing
+# Hardened Security Sandboxing
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/var/log/phylax /etc/phylax
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 NoNewPrivileges=true
 PrivateTmp=true
 
@@ -79,7 +114,7 @@ PrivateTmp=true
 WantedBy=multi-user.target
 ```
 
-Enable and start the service:
+Enable and start manually:
 
 ```bash
 sudo systemctl daemon-reload
