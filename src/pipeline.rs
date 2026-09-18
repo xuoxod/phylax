@@ -477,6 +477,18 @@ impl ShieldPipelineBuilder {
     }
 
     #[cfg(feature = "abuse-reporting")]
+    /// Automatically discovers AbuseIPDB credentials and activates live automated reporting
+    pub fn with_default_abuse_reporting(mut self) -> Self {
+        let conf = crate::abuse_reporting::InformantConfig::from_env_or_default();
+        if conf.enabled {
+            self.informant = Some(Arc::new(
+                crate::abuse_reporting::InformantEngine::with_http_transport(conf),
+            ));
+        }
+        self
+    }
+
+    #[cfg(feature = "abuse-reporting")]
     /// Attach an existing InformantEngine instance
     pub fn with_informant_engine(
         mut self,

@@ -11,7 +11,7 @@ keywords = ["security", "anti-bot", "honeypot", "proof-of-work", "waf"]
 categories = ["web-programming", "network-programming", "cryptography"]
 
 [features]
-default = []
+default = ["abuse-reporting"]
 abuse-reporting = ["dep:reqwest", "dep:async-trait", "dep:tracing"]
 cli = [
     "abuse-reporting",

@@ -31,6 +31,43 @@ impl Default for InformantConfig {
     }
 }
 
+impl InformantConfig {
+    /// Discovers configuration from environment variables or standard reference paths:
+    /// - Checks `ABUSEIPDB_API_KEY` environment variable
+    /// - Checks `~/Documents/reference/abuse_ip_db/api-key.txt` reference file
+    /// If an API key is discovered, live automated reporting is enabled.
+    pub fn from_env_or_default() -> Self {
+        let key = std::env::var("ABUSEIPDB_API_KEY")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                let home = std::env::var("HOME").ok()?;
+                let path = format!("{}/Documents/reference/abuse_ip_db/api-key.txt", home);
+                std::fs::read_to_string(path)
+                    .ok()
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+            });
+
+        let dry_run = std::env::var("RMT_ABUSE_REPORTING_DRY_RUN")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+
+        let enabled = key.is_some()
+            && std::env::var("RMT_ABUSE_REPORTING_ENABLED")
+                .map(|v| v != "false" && v != "0")
+                .unwrap_or(true);
+
+        Self {
+            enabled,
+            dry_run,
+            api_key: key,
+            cooldown: CooldownConfig::default(),
+        }
+    }
+}
+
 /// Result of evaluating an abusive incident
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InformantVerdict {
