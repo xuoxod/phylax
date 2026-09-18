@@ -73,8 +73,10 @@ detect_init_system() {
 
 # Find phylax binary location
 find_phylax_bin() {
-    if [ -n "${PHYLAX_BIN:-}" ] && [ -x "${PHYLAX_BIN}" ]; then
-        echo "${PHYLAX_BIN}"
+    if [ -n "${PHYLAX_BIN:-}" ]; then
+        if [ -x "${PHYLAX_BIN}" ]; then
+            echo "${PHYLAX_BIN}"
+        fi
         return 0
     fi
 
@@ -95,8 +97,13 @@ find_phylax_bin() {
 
 # Find or resolve configuration file location
 find_phylax_config() {
-    if [ -n "${PHYLAX_CONFIG:-}" ] && [ -f "${PHYLAX_CONFIG}" ]; then
+    if [ -n "${PHYLAX_CONFIG:-}" ]; then
         echo "${PHYLAX_CONFIG}"
+        return 0
+    fi
+
+    if [ "${USER_MODE:-0}" = "1" ]; then
+        echo "${HOME}/.config/phylax/phylax.toml"
         return 0
     fi
 
@@ -135,7 +142,7 @@ run_privileged() {
 # 2. Service Generation Templates
 # ------------------------------------------------------------------------------
 
-# Render systemd service unit
+# Render systemd service unit (system-wide)
 generate_systemd_unit() {
     _bin="$1"
     _cfg="$2"
@@ -170,6 +177,31 @@ PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
+EOF
+}
+
+# Render systemd user service unit (per-user / non-root)
+generate_systemd_user_unit() {
+    _bin="$1"
+    _cfg="$2"
+
+    cat << EOF
+[Unit]
+Description=Phylax Sovereign Edge Defense & Reverse Proxy WAF
+After=network.target
+Documentation=https://github.com/xuoxod/phylax
+
+[Service]
+Type=simple
+ExecStart=${_bin} serve --config ${_cfg}
+Restart=always
+RestartSec=3s
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
 EOF
 }
 
@@ -286,11 +318,34 @@ action_install() {
     # Generate config if it doesn't exist
     if [ ! -f "${_cfg}" ]; then
         log_info "Initializing template configuration at ${_cfg}..."
-        run_privileged mkdir -p "${_cfg_dir}"
-        run_privileged "${_bin}" init --output "${_cfg}"
+        if [ "${USER_MODE}" = "1" ]; then
+            mkdir -p "${_cfg_dir}"
+            "${_bin}" init --output "${_cfg}"
+        else
+            run_privileged mkdir -p "${_cfg_dir}"
+            run_privileged "${_bin}" init --output "${_cfg}"
+        fi
     fi
 
-    # Create dedicated non-root service user if running as root
+    _init_sys=$(detect_init_system)
+    log_info "Detected Init System:    ${_init_sys}"
+
+    if [ "${_init_sys}" = "systemd" ] && [ "${USER_MODE}" = "1" ]; then
+        _unit_dir="${HOME}/.config/systemd/user"
+        _unit_dest="${_unit_dir}/phylax.service"
+        log_info "Service Mode:            systemd user instance"
+        log_info "Generating systemd user unit at ${_unit_dest}..."
+        mkdir -p "${_unit_dir}"
+        generate_systemd_user_unit "${_bin}" "${_cfg}" > "${_unit_dest}"
+        chmod 644 "${_unit_dest}"
+        systemctl --user daemon-reload
+        systemctl --user enable phylax.service
+        log_success "systemd user service unit installed and enabled."
+        log_info "Start service with: ${0} start --user"
+        return 0
+    fi
+
+    # System-wide installation
     _service_user="phylax"
     if [ "$(id -u)" -eq 0 ]; then
         if ! id -u "${_service_user}" >/dev/null 2>&1; then
@@ -310,12 +365,10 @@ action_install() {
         _service_user="$(id -un)"
     fi
 
-    _init_sys=$(detect_init_system)
-    log_info "Detected Init System:    ${_init_sys}"
-
     case "${_init_sys}" in
         systemd)
             _unit_dest="/etc/systemd/system/phylax.service"
+            log_info "Service Mode:            systemd system-wide"
             log_info "Generating systemd unit at ${_unit_dest}..."
             _tmp_unit=$(mktemp)
             generate_systemd_unit "${_bin}" "${_cfg}" "${_service_user}" > "${_tmp_unit}"
@@ -366,6 +419,12 @@ action_install() {
 # ACTION: START
 action_start() {
     _init_sys=$(detect_init_system)
+    if [ "${_init_sys}" = "systemd" ] && [ "${USER_MODE}" = "1" ]; then
+        log_info "Starting Phylax user service (systemctl --user)..."
+        systemctl --user start phylax.service
+        log_success "Phylax user service started."
+        return 0
+    fi
     log_info "Starting Phylax service (${_init_sys})..."
     case "${_init_sys}" in
         systemd)
@@ -388,6 +447,12 @@ action_start() {
 # ACTION: STOP
 action_stop() {
     _init_sys=$(detect_init_system)
+    if [ "${_init_sys}" = "systemd" ] && [ "${USER_MODE}" = "1" ]; then
+        log_info "Stopping Phylax user service (systemctl --user)..."
+        systemctl --user stop phylax.service 2>/dev/null || true
+        log_success "Phylax user service stopped."
+        return 0
+    fi
     log_info "Stopping Phylax service (${_init_sys})..."
     case "${_init_sys}" in
         systemd)
@@ -410,6 +475,12 @@ action_stop() {
 # ACTION: RESTART
 action_restart() {
     _init_sys=$(detect_init_system)
+    if [ "${_init_sys}" = "systemd" ] && [ "${USER_MODE}" = "1" ]; then
+        log_info "Restarting Phylax user service (systemctl --user)..."
+        systemctl --user restart phylax.service
+        log_success "Phylax user service restarted."
+        return 0
+    fi
     log_info "Restarting Phylax service (${_init_sys})..."
     case "${_init_sys}" in
         systemd)
@@ -432,6 +503,11 @@ action_restart() {
 # ACTION: STATUS
 action_status() {
     _init_sys=$(detect_init_system)
+    if [ "${_init_sys}" = "systemd" ] && [ "${USER_MODE}" = "1" ]; then
+        printf "%b=== Phylax Service Status (systemd --user) ===%b\n" "${C_BOLD}" "${C_RESET}"
+        systemctl --user status phylax.service --no-pager || true
+        return 0
+    fi
     printf "%b=== Phylax Service Status (%s) ===%b\n" "${C_BOLD}" "${_init_sys}" "${C_RESET}"
     case "${_init_sys}" in
         systemd)
@@ -457,9 +533,16 @@ action_reset() {
     action_stop
 
     # Clear active log and state files if requested
-    if [ -d "/var/log/phylax" ]; then
-        log_info "2. Truncating service log files..."
-        run_privileged find /var/log/phylax -type f -name "*.log" -exec truncate -s 0 {} + 2>/dev/null || true
+    if [ "${USER_MODE}" = "1" ]; then
+        if [ -d "${HOME}/.local/state/phylax" ]; then
+            log_info "2. Truncating user log files..."
+            find "${HOME}/.local/state/phylax" -type f -name "*.log" -exec truncate -s 0 {} + 2>/dev/null || true
+        fi
+    else
+        if [ -d "/var/log/phylax" ]; then
+            log_info "2. Truncating service log files..."
+            run_privileged find /var/log/phylax -type f -name "*.log" -exec truncate -s 0 {} + 2>/dev/null || true
+        fi
     fi
 
     # Test configuration validity
@@ -483,6 +566,20 @@ action_uninstall() {
     action_stop
 
     _init_sys=$(detect_init_system)
+    if [ "${_init_sys}" = "systemd" ] && [ "${USER_MODE}" = "1" ]; then
+        _unit_dest="${HOME}/.config/systemd/user/phylax.service"
+        if [ -f "${_unit_dest}" ]; then
+            log_info "Disabling systemd user unit..."
+            systemctl --user disable phylax.service 2>/dev/null || true
+            rm -f "${_unit_dest}"
+            systemctl --user daemon-reload
+            log_success "Removed ${_unit_dest}."
+        fi
+        log_info "Note: Binary files and configuration templates were preserved."
+        log_success "Phylax user service cleanly uninstalled."
+        return 0
+    fi
+
     case "${_init_sys}" in
         systemd)
             if [ -f "/etc/systemd/system/phylax.service" ]; then
@@ -518,7 +615,7 @@ action_uninstall() {
 # 4. Command Router
 # ------------------------------------------------------------------------------
 show_help() {
-    printf "%bUsage:%b %s <command> [options]\n\n" "${C_BOLD}" "${C_RESET}" "$0"
+    printf "%bUsage:%b %s <command> [--user|--system] [options]\n\n" "${C_BOLD}" "${C_RESET}" "$0"
     printf "%bCommands:%b\n" "${C_BOLD}" "${C_RESET}"
     printf "  %binstall%b     Generate and register service unit (systemd, openrc, or sysvinit)\n" "${C_GREEN}" "${C_RESET}"
     printf "  %bstart%b       Start the registered service\n" "${C_GREEN}" "${C_RESET}"
@@ -528,18 +625,60 @@ show_help() {
     printf "  %breset%b       Stop, flush logs/transient state, and restart cleanly\n" "${C_YELLOW}" "${C_RESET}"
     printf "  %buninstall%b   Stop, disable, and delete service unit files\n" "${C_RED}" "${C_RESET}"
     printf "\n"
+    printf "%bOptions:%b\n" "${C_BOLD}" "${C_RESET}"
+    printf "  --user             Manage service as systemd user unit (~/.config/systemd/user)\n"
+    printf "  --system           Force system-wide installation (requires root or sudo)\n"
+    printf "\n"
     printf "%bEnvironment Variables:%b\n" "${C_BOLD}" "${C_RESET}"
     printf "  PHYLAX_BIN         Explicit path to phylax binary\n"
     printf "  PHYLAX_CONFIG      Explicit path to phylax.toml configuration\n"
     printf "  PHYLAX_INIT_SYSTEM Force init system ('systemd', 'openrc', 'sysvinit')\n"
+    printf "  PHYLAX_USER_MODE   Set to '1' to enforce systemd user mode\n"
     printf "  NO_COLOR           Disable colored terminal output\n\n"
 }
 
-if [ "${PHYLAX_SOURCE_ONLY:-}" = "1" ] || [ "${1:-}" = "--source-only" ]; then
+USER_MODE=0
+SYSTEM_MODE=0
+COMMAND=""
+
+for arg in "$@"; do
+    case "$arg" in
+        --user)
+            USER_MODE=1
+            ;;
+        --system)
+            SYSTEM_MODE=1
+            ;;
+        --source-only)
+            return 0 2>/dev/null || exit 0
+            ;;
+        help|--help|-h)
+            COMMAND="help"
+            ;;
+        *)
+            if [ -z "${COMMAND}" ]; then
+                COMMAND="$arg"
+            fi
+            ;;
+    esac
+done
+
+if [ "${PHYLAX_SOURCE_ONLY:-}" = "1" ]; then
     return 0 2>/dev/null || exit 0
 fi
 
-COMMAND="${1:-}"
+# Respect PHYLAX_USER_MODE environment variable
+if [ "${PHYLAX_USER_MODE:-0}" = "1" ]; then
+    USER_MODE=1
+fi
+
+# Auto-detect user mode if running non-root and systemd is detected, unless --system explicitly forced
+if [ "${USER_MODE}" = "0" ] && [ "${SYSTEM_MODE}" = "0" ] && [ "$(id -u)" -ne 0 ]; then
+    _auto_init=$(detect_init_system)
+    if [ "${_auto_init}" = "systemd" ]; then
+        USER_MODE=1
+    fi
+fi
 
 case "${COMMAND}" in
     install)
@@ -563,7 +702,7 @@ case "${COMMAND}" in
     uninstall)
         action_uninstall
         ;;
-    help|--help|-h|"")
+    help|"")
         show_help
         ;;
     *)

@@ -50,51 +50,95 @@ enum Commands {
     Bench,
 }
 
+#[derive(serde::Deserialize, Debug, Default)]
+struct ServerConfigToml {
+    listen: Option<String>,
+    upstream: Option<String>,
+    secret_key: Option<String>,
+}
+
+#[derive(serde::Deserialize, Debug, Default)]
+struct DefenseConfigToml {
+    honeypot_fields: Option<Vec<String>>,
+    timing_min_ms: Option<u64>,
+    pow_difficulty: Option<u8>,
+    pow_expiration_ms: Option<u64>,
+    enable_tarpit: Option<bool>,
+    max_concurrent_tarpits: Option<usize>,
+    enable_autonomous_quarantine: Option<bool>,
+    quarantine_threshold: Option<u32>,
+    quarantine_duration_ms: Option<u64>,
+}
+
+#[derive(serde::Deserialize, Debug, Default)]
+struct MaintenanceConfigToml {
+    sweep_interval_s: Option<u64>,
+}
+
+#[derive(serde::Deserialize, Debug, Default)]
+struct AbuseReportingConfigToml {
+    enabled: Option<bool>,
+    dry_run: Option<bool>,
+    api_key: Option<String>,
+}
+
+#[derive(serde::Deserialize, Debug, Default)]
+struct PhylaxConfigFile {
+    server: Option<ServerConfigToml>,
+    defense: Option<DefenseConfigToml>,
+    maintenance: Option<MaintenanceConfigToml>,
+    abuse_reporting: Option<AbuseReportingConfigToml>,
+}
+
 #[derive(Args, Debug, Clone)]
 struct ServeArgs {
+    /// Optional path to configuration file (TOML format, e.g. phylax.toml)
+    #[arg(short, long, env = "PHYLAX_CONFIG")]
+    config: Option<std::path::PathBuf>,
+
     /// Upstream target service to protect (e.g. http://127.0.0.1:8080)
-    #[arg(short, long, default_value = "http://127.0.0.1:8080")]
-    upstream: String,
+    #[arg(short, long)]
+    upstream: Option<String>,
 
     /// Socket address to listen on
-    #[arg(short, long, default_value = "0.0.0.0:3000")]
-    listen: String,
+    #[arg(short, long)]
+    listen: Option<String>,
 
     /// Secret HMAC key seed for tamper-proof tokens (auto-generated if omitted)
-    #[arg(long, default_value = "phylax-sovereign-master-key-seed-2026")]
-    secret: String,
+    #[arg(long)]
+    secret: Option<String>,
 
     /// Comma-separated list of hidden decoy honeypot fields
-    #[arg(long, default_value = "website_url,company_fax")]
-    honeypot_fields: String,
+    #[arg(long)]
+    honeypot_fields: Option<String>,
 
     /// Minimum form interaction timing requirement in milliseconds
-    #[arg(long, default_value_t = 2000)]
-    timing_min_ms: u64,
+    #[arg(long)]
+    timing_min_ms: Option<u64>,
 
     /// Proof-of-Work puzzle difficulty in bits (0 to disable, 12 = ~5ms, 16 = ~80ms)
-    #[arg(long, default_value_t = 12)]
-    pow_difficulty: u8,
+    #[arg(long)]
+    pow_difficulty: Option<u8>,
 
     /// Engage asymmetric slowloris tarpit against trapped bots
-    #[arg(long, default_value_t = true)]
-    tarpit: bool,
+    #[arg(long, num_args(0..=1), default_missing_value = "true")]
+    tarpit: Option<bool>,
 
     /// Autonomous CIDR quarantine for repeat offenders (/24 IPv4, /48 IPv6)
-    #[arg(long, default_value_t = true)]
-    quarantine: bool,
+    #[arg(long, num_args(0..=1), default_missing_value = "true")]
+    quarantine: Option<bool>,
 
     /// Enable collaborative threat reporting to AbuseIPDB
-    #[arg(long, default_value_t = false)]
-    abuse_reporting: bool,
+    #[arg(long, num_args(0..=1), default_missing_value = "true")]
+    abuse_reporting: Option<bool>,
 
     /// AbuseIPDB API key (reads from ABUSEIPDB_API_KEY env if not specified)
     #[arg(long, env = "ABUSEIPDB_API_KEY")]
     abuseipdb_key: Option<String>,
 
     /// Autonomous in-memory maintenance sweep interval in seconds
-    #[arg(long, default_value_t = 60)]
-    maintenance_interval_s: u64,
+    #[arg(long)]
+    maintenance_interval_s: Option<u64>,
 }
 
 #[derive(Args, Debug)]
@@ -174,41 +218,241 @@ async fn run_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Error>> {
     "#
     );
 
-    let decoy_fields: Vec<String> = args
-        .honeypot_fields
-        .split(',')
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
+    let (
+        listen,
+        upstream_url,
+        secret,
+        decoy_fields,
+        timing_min_ms,
+        pow_difficulty,
+        pow_expiration_ms,
+        tarpit_enabled,
+        tarpit_max_concurrent,
+        quarantine_enabled,
+        quarantine_threshold,
+        quarantine_duration_ms,
+        maintenance_interval_s,
+        abuse_reporting_enabled,
+        abuse_dry_run,
+        abuseipdb_key,
+    ) = {
+        let mut config_file: Option<PhylaxConfigFile> = None;
+        if let Some(path) = &args.config {
+            if !path.exists() {
+                return Err(format!("Configuration file not found: {}", path.display()).into());
+            }
+            let raw = std::fs::read_to_string(path)?;
+            let parsed: PhylaxConfigFile = toml::from_str(&raw).map_err(|e| {
+                format!(
+                    "Failed to parse TOML configuration from {}: {}",
+                    path.display(),
+                    e
+                )
+            })?;
+            println!("  📄 Loaded configuration: {}", path.display());
+            config_file = Some(parsed);
+        }
+
+        let listen = args
+            .listen
+            .or_else(|| {
+                config_file
+                    .as_ref()
+                    .and_then(|c| c.server.as_ref())
+                    .and_then(|s| s.listen.clone())
+            })
+            .unwrap_or_else(|| "0.0.0.0:3000".to_string());
+
+        let upstream = args
+            .upstream
+            .or_else(|| {
+                config_file
+                    .as_ref()
+                    .and_then(|c| c.server.as_ref())
+                    .and_then(|s| s.upstream.clone())
+            })
+            .unwrap_or_else(|| "http://127.0.0.1:8080".to_string());
+
+        let secret = args
+            .secret
+            .or_else(|| {
+                config_file
+                    .as_ref()
+                    .and_then(|c| c.server.as_ref())
+                    .and_then(|s| s.secret_key.clone())
+            })
+            .unwrap_or_else(|| "phylax-sovereign-master-key-seed-2026".to_string());
+
+        let decoy_fields: Vec<String> = if let Some(cli_fields) = args.honeypot_fields {
+            cli_fields
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        } else if let Some(cfg_fields) = config_file
+            .as_ref()
+            .and_then(|c| c.defense.as_ref())
+            .and_then(|d| d.honeypot_fields.clone())
+        {
+            cfg_fields
+        } else {
+            vec!["website_url".to_string(), "company_fax".to_string()]
+        };
+
+        let timing_min_ms = args
+            .timing_min_ms
+            .or_else(|| {
+                config_file
+                    .as_ref()
+                    .and_then(|c| c.defense.as_ref())
+                    .and_then(|d| d.timing_min_ms)
+            })
+            .unwrap_or(2000);
+
+        let pow_difficulty = args
+            .pow_difficulty
+            .or_else(|| {
+                config_file
+                    .as_ref()
+                    .and_then(|c| c.defense.as_ref())
+                    .and_then(|d| d.pow_difficulty)
+            })
+            .unwrap_or(12);
+
+        let pow_expiration_ms = config_file
+            .as_ref()
+            .and_then(|c| c.defense.as_ref())
+            .and_then(|d| d.pow_expiration_ms)
+            .unwrap_or(300_000);
+
+        let tarpit_enabled = args
+            .tarpit
+            .or_else(|| {
+                config_file
+                    .as_ref()
+                    .and_then(|c| c.defense.as_ref())
+                    .and_then(|d| d.enable_tarpit)
+            })
+            .unwrap_or(true);
+
+        let tarpit_max_concurrent = config_file
+            .as_ref()
+            .and_then(|c| c.defense.as_ref())
+            .and_then(|d| d.max_concurrent_tarpits)
+            .unwrap_or(256);
+
+        let quarantine_enabled = args
+            .quarantine
+            .or_else(|| {
+                config_file
+                    .as_ref()
+                    .and_then(|c| c.defense.as_ref())
+                    .and_then(|d| d.enable_autonomous_quarantine)
+            })
+            .unwrap_or(true);
+
+        let quarantine_threshold = config_file
+            .as_ref()
+            .and_then(|c| c.defense.as_ref())
+            .and_then(|d| d.quarantine_threshold)
+            .unwrap_or(3);
+
+        let quarantine_duration_ms = config_file
+            .as_ref()
+            .and_then(|c| c.defense.as_ref())
+            .and_then(|d| d.quarantine_duration_ms)
+            .unwrap_or(24 * 60 * 60 * 1000);
+
+        let maintenance_interval_s = args
+            .maintenance_interval_s
+            .or_else(|| {
+                config_file
+                    .as_ref()
+                    .and_then(|c| c.maintenance.as_ref())
+                    .and_then(|m| m.sweep_interval_s)
+            })
+            .unwrap_or(60);
+
+        let abuse_reporting_enabled = args
+            .abuse_reporting
+            .or_else(|| {
+                config_file
+                    .as_ref()
+                    .and_then(|c| c.abuse_reporting.as_ref())
+                    .and_then(|a| a.enabled)
+            })
+            .unwrap_or(false);
+
+        let abuseipdb_key = args
+            .abuseipdb_key
+            .or_else(|| {
+                config_file
+                    .as_ref()
+                    .and_then(|c| c.abuse_reporting.as_ref())
+                    .and_then(|a| a.api_key.clone())
+            })
+            .filter(|k| !k.is_empty());
+
+        let abuse_dry_run = config_file
+            .as_ref()
+            .and_then(|c| c.abuse_reporting.as_ref())
+            .and_then(|a| a.dry_run)
+            .unwrap_or(true);
+
+        (
+            listen,
+            upstream,
+            secret,
+            decoy_fields,
+            timing_min_ms,
+            pow_difficulty,
+            pow_expiration_ms,
+            tarpit_enabled,
+            tarpit_max_concurrent,
+            quarantine_enabled,
+            quarantine_threshold,
+            quarantine_duration_ms,
+            maintenance_interval_s,
+            abuse_reporting_enabled,
+            abuse_dry_run,
+            abuseipdb_key,
+        )
+    };
 
     let mut builder = PhylaxPipeline::builder()
-        .secret_key(args.secret.as_bytes())
+        .secret_key(secret.as_bytes())
         .with_honeypot_fields(decoy_fields.clone())
-        .with_timing(args.timing_min_ms, 86_400_000)
-        .with_pow(args.pow_difficulty, 300_000)
-        .enable_pow(args.pow_difficulty > 0);
+        .with_timing(timing_min_ms, 86_400_000)
+        .with_pow(pow_difficulty, pow_expiration_ms)
+        .enable_pow(pow_difficulty > 0);
 
-    if args.tarpit {
-        builder = builder.with_tarpit(TarpitConfig::default());
+    if tarpit_enabled {
+        let mut tarpit_config = TarpitConfig::default();
+        tarpit_config.max_concurrent_tarpits = tarpit_max_concurrent;
+        builder = builder.with_tarpit(tarpit_config);
     }
 
-    if args.quarantine {
-        builder = builder.with_quarantine(QuarantineConfig::default());
+    if quarantine_enabled {
+        let mut quarantine_config = QuarantineConfig::default();
+        quarantine_config.infraction_threshold = quarantine_threshold;
+        quarantine_config.quarantine_duration_ms = quarantine_duration_ms;
+        builder = builder.with_quarantine(quarantine_config);
         builder = builder.with_adaptive_pow(AdaptivePowConfig::default());
     }
 
     #[cfg(feature = "abuse-reporting")]
-    if args.abuse_reporting {
+    if abuse_reporting_enabled {
+        let is_dry = abuse_dry_run || abuseipdb_key.is_none();
         let informant_config = phylax::abuse_reporting::InformantConfig {
             enabled: true,
-            dry_run: args.abuseipdb_key.is_none(),
-            api_key: args.abuseipdb_key.clone(),
+            dry_run: is_dry,
+            api_key: abuseipdb_key.clone(),
             cooldown: phylax::abuse_reporting::CooldownConfig::default(),
         };
         builder = builder.with_abuse_reporting(informant_config);
         println!(
             "  📡 Collaborative Abuse Reporting: ENABLED (Dry-Run: {})",
-            args.abuseipdb_key.is_none()
+            is_dry
         );
     }
 
@@ -216,9 +460,9 @@ async fn run_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     // Spawn autonomous memory hygiene worker
     let maintenance_handle =
-        pipeline.spawn_background_maintenance(Duration::from_secs(args.maintenance_interval_s));
+        pipeline.spawn_background_maintenance(Duration::from_secs(maintenance_interval_s));
 
-    let upstream = args.upstream.trim_end_matches('/').to_string();
+    let upstream = upstream_url.trim_end_matches('/').to_string();
     let http_client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()?;
@@ -230,18 +474,18 @@ async fn run_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Error>> {
         start_time: Instant::now(),
     };
 
-    println!("  🛡️  Listen Socket:      {}", args.listen);
+    println!("  🛡️  Listen Socket:      {}", listen);
     println!("  🎯 Upstream Target:    {}", upstream);
     println!("  🍯 Decoy Honeypots:    {:?}", decoy_fields);
-    println!("  ⏳ Min Timing Token:   {} ms", args.timing_min_ms);
-    println!("  🧩 PoW Difficulty:     {} bits", args.pow_difficulty);
+    println!("  ⏳ Min Timing Token:   {} ms", timing_min_ms);
+    println!("  🧩 PoW Difficulty:     {} bits", pow_difficulty);
     println!(
         "  🕸️  Asymmetric Tarpit:  {}",
-        if args.tarpit { "ENABLED" } else { "DISABLED" }
+        if tarpit_enabled { "ENABLED" } else { "DISABLED" }
     );
     println!(
         "  🔒 Autonomous CIDR:    {}",
-        if args.quarantine {
+        if quarantine_enabled {
             "ENABLED"
         } else {
             "DISABLED"
@@ -249,7 +493,7 @@ async fn run_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "  🧹 Memory Maintenance: Every {}s",
-        args.maintenance_interval_s
+        maintenance_interval_s
     );
     println!("\n  Endpoints Active:");
     println!("    • GET  /_phylax/challenge -> Issue client tokens + PoW challenge");
@@ -264,7 +508,7 @@ async fn run_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Error>> {
         .fallback(any(handle_proxy))
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind(&args.listen).await?;
+    let listener = tokio::net::TcpListener::bind(&listen).await?;
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),

@@ -150,6 +150,17 @@ _sysv_out=$(
 assert_contains "${_sysv_out}" "### BEGIN INIT INFO" "SysVinit script includes standard LSB init header"
 assert_contains "${_sysv_out}" "start-stop-daemon" "SysVinit script utilizes start-stop-daemon"
 
+# 2.4 Test systemd user-unit generation (per-user / non-root)
+_systemd_user_out=$(
+    PHYLAX_SOURCE_ONLY=1 . "${SERVICE_SCRIPT}"
+    generate_systemd_user_unit "${MOCK_BIN}" "${MOCK_CFG}"
+)
+
+assert_contains "${_systemd_user_out}" "ExecStart=${MOCK_BIN} serve --config ${MOCK_CFG}" "systemd user unit sets exact ExecStart command"
+assert_contains "${_systemd_user_out}" "WantedBy=default.target" "systemd user unit targets default.target"
+assert_not_contains "${_systemd_user_out}" "User=" "systemd user unit omits forbidden User= directive"
+assert_not_contains "${_systemd_user_out}" "Group=" "systemd user unit omits forbidden Group= directive"
+
 # ------------------------------------------------------------------------------
 # TIER 3: Environment Discovery & Init System Detection
 # ------------------------------------------------------------------------------
@@ -186,6 +197,9 @@ assert_contains "${_help_out}" "restart" "Help menu includes restart action"
 assert_contains "${_help_out}" "status" "Help menu includes status action"
 assert_contains "${_help_out}" "reset" "Help menu includes reset action"
 assert_contains "${_help_out}" "uninstall" "Help menu includes uninstall action"
+assert_contains "${_help_out}" "--user" "Help menu documents --user flag"
+assert_contains "${_help_out}" "--system" "Help menu documents --system flag"
+assert_contains "${_help_out}" "PHYLAX_USER_MODE" "Help menu documents PHYLAX_USER_MODE environment variable"
 
 # 4.2 Invalid command returns non-zero exit code
 _invalid_exit=0

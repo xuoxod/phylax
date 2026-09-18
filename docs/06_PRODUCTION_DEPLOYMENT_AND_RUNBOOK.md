@@ -56,6 +56,8 @@ It automatically detects your host's init system:
 
 ### Automated Service Management Commands
 
+#### Production (System-Wide Service with Dedicated Security User)
+
 ```bash
 # 1. Install & register the service (creates user, unit files, and enables on boot)
 sudo ./scripts/phylax-service.sh install
@@ -75,7 +77,28 @@ sudo ./scripts/phylax-service.sh reset
 sudo ./scripts/phylax-service.sh uninstall
 ```
 
-> 🧪 **Rigorous Verification:** The service manager is verified by a 30-tier POSIX compliance TDD test suite ([`scripts/tests/phylax_service_tdd.sh`](../scripts/tests/phylax_service_tdd.sh)) guaranteeing zero bashisms and complete portability across `sh`, `ash` (BusyBox), `dash`, and `bash`.
+#### Development & Rootless (`systemd --user`)
+
+Developers and non-root operators can install and manage Phylax without `sudo` or root privileges:
+
+```bash
+# 1. Install as user service (~/.config/systemd/user/phylax.service)
+./scripts/phylax-service.sh install --user
+
+# 2. Check service health and live logs
+./scripts/phylax-service.sh status --user
+
+# 3. Start, stop, or restart
+./scripts/phylax-service.sh start --user
+./scripts/phylax-service.sh stop --user
+./scripts/phylax-service.sh restart --user
+
+# 4. Reset or uninstall
+./scripts/phylax-service.sh reset --user
+./scripts/phylax-service.sh uninstall --user
+```
+
+> 🧪 **Rigorous Verification:** The service manager is verified by a 37-tier POSIX compliance TDD test suite ([`scripts/tests/phylax_service_tdd.sh`](../scripts/tests/phylax_service_tdd.sh)) guaranteeing zero bashisms and complete portability across `sh`, `ash` (BusyBox), `dash`, and `bash`.
 
 ---
 
