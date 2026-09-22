@@ -14,7 +14,7 @@ use axum::Router;
 use clap::{Args, Parser, Subcommand};
 use phylax::adaptive_pow::AdaptivePowConfig;
 use phylax::autonomous_quarantine::QuarantineConfig;
-use phylax::pipeline::{PhylaxPipeline, PhylaxRequest, ShieldVerdict};
+use phylax::pipeline::{DenialReason, PhylaxPipeline, PhylaxRequest, ShieldVerdict};
 use phylax::pow::PowEngine;
 use phylax::tarpit::TarpitConfig;
 use std::net::SocketAddr;
@@ -702,8 +702,13 @@ async fn handle_proxy(
             reason.public_message()
         );
 
+        let status = match &reason {
+            DenialReason::DecoyUriTrapped { .. } => StatusCode::NOT_FOUND,
+            _ => StatusCode::FORBIDDEN,
+        };
+
         return (
-            StatusCode::FORBIDDEN,
+            status,
             axum::Json(serde_json::json!({
                 "status": "BLOCKED",
                 "error": reason.public_message(),

@@ -89,6 +89,12 @@ When requests originate from confirmed hostile subnets (quarantined CIDRs, datac
   ```
 - **Outcome:** Automated port and path scanners assume the endpoint does not exist or has been decommissioned, dropping it from their target index.
 
+### Pillar 4: Decoy URI Honeyroutes (`phylax::decoy_uri`)
+Automated vulnerability scanners (Nuclei, Nikto, Shodan, Censys) constantly crawl for configuration and credential leaks:
+- Probing targets: `/.env`, `/.git/HEAD`, `/app/terraform.tfstate`, `/.azure/credentials`, `/wp-login.php`, `/private.key`.
+- **Zero Human False Positives:** Legitimate end users never manually navigate to `/.azure/credentials` or `/pip.conf`.
+- **Stealth Action:** `phylax` intercepts the probe in `<10ns`, normalizes multi-slashes (`//.env`), returns a stealth `404 Not Found` to prevent rule fingerprinting, ratchets client IP adaptive PoW penalties, and autonomously dispatches forensic incident dossiers to AbuseIPDB (Category 15: *Hacking*, Category 21: *Web App Attack*) and registered SIEM webhooks.
+
 ---
 
 ## 4. The Asymmetric Tarpit: Reverse Slowloris

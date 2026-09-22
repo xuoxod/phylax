@@ -3,6 +3,7 @@
 
 use crate::adaptive_pow::{AdaptivePowConfig, AdaptivePowEngine, InfractionSeverity};
 use crate::autonomous_quarantine::{AutonomousQuarantine, QuarantineConfig};
+use crate::decoy_uri::{DecoyUriConfig, DecoyUriSentinel, DecoyUriVerdict};
 use crate::email_guard::{EmailPatternGuard, EmailVerdict};
 use crate::honeypot::{HoneypotValidator, HoneypotVerdict};
 use crate::pow::{PowEngine, PowVerdict};
@@ -42,6 +43,7 @@ pub struct ShieldClientContext {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DenialReason {
     HoneypotTrapped { field: String },
+    DecoyUriTrapped { path: String, category: String },
     SubnetBlocked { ip: String, cidr: String },
     EmailPatternSuspicious { reason: String },
     SubmissionTooFast { elapsed_ms: u64, min_ms: u64 },
@@ -58,6 +60,9 @@ impl DenialReason {
     pub fn public_message(&self) -> &'static str {
         match self {
             DenialReason::HoneypotTrapped { .. } => "Automated submission detected (trap tripped).",
+            DenialReason::DecoyUriTrapped { .. } => {
+                "Access restricted: Automated reconnaissance probe detected."
+            }
             DenialReason::SubnetBlocked { .. } => {
                 "Perimeter access restricted: Tor exit node or hosting datacenter."
             }
@@ -115,6 +120,7 @@ pub struct ShieldPipeline {
     tarpit: TarpitGovernor,
     adaptive_pow: AdaptivePowEngine,
     quarantine: AutonomousQuarantine,
+    decoy_uri: DecoyUriSentinel,
     enable_pow: bool,
     enable_timing: bool,
     enable_subnet: bool,
@@ -126,6 +132,11 @@ impl ShieldPipeline {
     /// Create a new pipeline builder
     pub fn builder() -> ShieldPipelineBuilder {
         ShieldPipelineBuilder::default()
+    }
+
+    /// Access the Decoy URI Sentinel
+    pub fn decoy_uri(&self) -> &DecoyUriSentinel {
+        &self.decoy_uri
     }
 
     /// Access the Tarpit Governor
@@ -224,6 +235,47 @@ impl ShieldPipeline {
                 ip: req.client_ip.to_string(),
                 cidr: "autonomous_quarantine".to_string(),
             });
+        }
+
+        // 0.5 Layer 0.5: Decoy URI Reconnaissance Check (~5-10ns)
+        if let Some(target_uri) = req.target_uri {
+            let uri_verdict = self.decoy_uri.evaluate(target_uri);
+            if let DecoyUriVerdict::Trapped { matched_path, category } = uri_verdict {
+                if !req.client_ip.is_empty() {
+                    self.quarantine.record_and_check(req.client_ip, req.now_ms);
+                    self.adaptive_pow.record_infraction(
+                        req.client_ip,
+                        InfractionSeverity::Hostile,
+                        req.now_ms,
+                    );
+
+                    #[cfg(feature = "abuse-reporting")]
+                    if let Some(ref informant) = self.informant {
+                        let dossier = crate::abuse_reporting::ForensicDossier {
+                            client_ip: req.client_ip.to_string(),
+                            timestamp_ms: req.now_ms,
+                            target_uri: target_uri.to_string(),
+                            http_method: req.http_method.unwrap_or("GET").to_string(),
+                            category: crate::abuse_reporting::AbuseCategory::ExploitProbe,
+                            trapped_field: None,
+                            user_agent: req.user_agent.map(|s| s.to_string()),
+                            evidence_notes: format!(
+                                "Phylax autonomous decoy URI probe trapped on path '{}' ({})",
+                                matched_path,
+                                category.name()
+                            ),
+                        };
+                        let informant_cloned = informant.clone();
+                        tokio::spawn(async move {
+                            informant_cloned.process_incident(&dossier).await;
+                        });
+                    }
+                }
+                return ShieldVerdict::Deny(DenialReason::DecoyUriTrapped {
+                    path: matched_path,
+                    category: category.name().to_string(),
+                });
+            }
         }
 
         // 1. Layer 1: Honeypot Check (~5ns)
@@ -382,6 +434,7 @@ pub struct ShieldPipelineBuilder {
     tarpit_config: TarpitConfig,
     adaptive_pow_config: AdaptivePowConfig,
     quarantine_config: QuarantineConfig,
+    decoy_uri_config: DecoyUriConfig,
     #[cfg(feature = "abuse-reporting")]
     informant: Option<Arc<crate::abuse_reporting::InformantEngine>>,
 }
@@ -402,6 +455,7 @@ impl Default for ShieldPipelineBuilder {
             tarpit_config: TarpitConfig::default(),
             adaptive_pow_config: AdaptivePowConfig::default(),
             quarantine_config: QuarantineConfig::default(),
+            decoy_uri_config: DecoyUriConfig::default(),
             #[cfg(feature = "abuse-reporting")]
             informant: None,
         }
@@ -449,6 +503,12 @@ impl ShieldPipelineBuilder {
 
     pub fn with_quarantine(mut self, config: QuarantineConfig) -> Self {
         self.quarantine_config = config;
+        self
+    }
+
+    /// Configure the Decoy URI Reconnaissance Sentinel
+    pub fn with_decoy_uris(mut self, config: DecoyUriConfig) -> Self {
+        self.decoy_uri_config = config;
         self
     }
 
@@ -515,6 +575,7 @@ impl ShieldPipelineBuilder {
         let tarpit = TarpitGovernor::new(self.tarpit_config);
         let adaptive_pow = AdaptivePowEngine::new(self.adaptive_pow_config);
         let quarantine = AutonomousQuarantine::new(self.quarantine_config);
+        let decoy_uri = DecoyUriSentinel::new(self.decoy_uri_config);
 
         ShieldPipeline {
             honeypot,
@@ -525,6 +586,7 @@ impl ShieldPipelineBuilder {
             tarpit,
             adaptive_pow,
             quarantine,
+            decoy_uri,
             enable_pow: self.enable_pow,
             enable_timing: self.enable_timing,
             enable_subnet: self.enable_subnet,

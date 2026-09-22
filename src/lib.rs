@@ -19,6 +19,7 @@ pub mod adaptive_pow;
 pub mod autonomous_quarantine;
 pub mod cache_shield;
 pub mod credential_guard;
+pub mod decoy_uri;
 pub mod dist_guard;
 pub mod email_guard;
 pub mod honeypot;
@@ -41,6 +42,7 @@ pub use adaptive_pow::{AdaptivePowConfig, AdaptivePowEngine, InfractionSeverity}
 pub use autonomous_quarantine::{AutonomousQuarantine, QuarantineConfig};
 pub use cache_shield::{CacheShield, CacheShieldConfig, CacheVerdict, CachedResponse};
 pub use credential_guard::{BreachedPasswordBloomFilter, CredentialGuard, CredentialVerdict};
+pub use decoy_uri::{DecoyCategory, DecoyUriConfig, DecoyUriSentinel, DecoyUriVerdict};
 pub use dist_guard::{DistGuard, DistGuardConfig, DistVerdict};
 pub use email_guard::{EmailPatternGuard, EmailVerdict};
 pub use honeypot::{HoneypotValidator, HoneypotVerdict};
