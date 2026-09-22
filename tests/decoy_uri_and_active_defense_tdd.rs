@@ -53,6 +53,24 @@ fn test_decoy_uri_sentinel_pure_evaluation() {
         sentinel.evaluate("/private.key"),
         DecoyUriVerdict::Trapped { category: DecoyCategory::PrivateKey, .. }
     ));
+
+    // 3. Generic PHP exploit scans against pure Rust backend
+    assert!(matches!(
+        sentinel.evaluate("/wp-configs.php"),
+        DecoyUriVerdict::Trapped { category: DecoyCategory::AdminCmsProbe, .. }
+    ));
+    assert!(matches!(
+        sentinel.evaluate("/update.php"),
+        DecoyUriVerdict::Trapped { category: DecoyCategory::AdminCmsProbe, .. }
+    ));
+    assert!(matches!(
+        sentinel.evaluate("/2.php"),
+        DecoyUriVerdict::Trapped { category: DecoyCategory::AdminCmsProbe, .. }
+    ));
+    assert!(matches!(
+        sentinel.evaluate("/shell.phtml"),
+        DecoyUriVerdict::Trapped { category: DecoyCategory::AdminCmsProbe, .. }
+    ));
 }
 
 #[test]

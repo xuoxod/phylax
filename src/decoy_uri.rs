@@ -246,6 +246,12 @@ impl DecoyUriSentinel {
 
             if let Some(ext_idx) = path.rfind('.') {
                 let ext = &path[ext_idx..];
+                if ext == ".php" || ext == ".phtml" || ext == ".php5" || ext == ".php7" {
+                    return DecoyUriVerdict::Trapped {
+                        matched_path: path.to_string(),
+                        category: DecoyCategory::AdminCmsProbe,
+                    };
+                }
                 if (ext == ".sql" || ext == ".dump" || ext == ".bak" || ext == ".old" || ext == ".swp")
                     && (path.contains("db")
                         || path.contains("data")
@@ -285,9 +291,15 @@ impl DecoyUriSentinel {
             }
         }
 
-        // 3. Sensitive Backup Extension Check (*.sql, *.dump, *.tar.gz, *.bak, *.old)
+        // 3. Sensitive Extension Check (*.php, *.sql, *.dump, *.tar.gz, *.bak, *.old)
         if let Some(ext_idx) = normalized.rfind('.') {
             let ext = &normalized[ext_idx..];
+            if ext == ".php" || ext == ".phtml" || ext == ".php5" || ext == ".php7" {
+                return DecoyUriVerdict::Trapped {
+                    matched_path: normalized,
+                    category: DecoyCategory::AdminCmsProbe,
+                };
+            }
             if (ext == ".sql" || ext == ".dump" || ext == ".bak" || ext == ".old" || ext == ".swp")
                 && (normalized.contains("db")
                     || normalized.contains("data")
