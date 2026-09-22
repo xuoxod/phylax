@@ -11,6 +11,7 @@ pub mod dossier;
 pub mod error;
 pub mod pipeline;
 pub mod rdap;
+pub mod sink;
 pub mod transport;
 
 pub use abuseipdb::{AbuseIpDbCheckResponse, AbuseIpDbReportPayload, AbuseIpDbResponse};
@@ -20,6 +21,10 @@ pub use dossier::{DossierFormatter, ForensicDossier};
 pub use error::{AbuseReportError, RdapError};
 pub use pipeline::{InformantConfig, InformantEngine, InformantVerdict};
 pub use rdap::{RdapContact, RdapParser};
+pub use sink::{
+    AbuseIpDbSink, GenericWebhookSink, IncidentSink, MockIncidentSink, MultiSink, SinkReceipt,
+    SyslogCefSink,
+};
 pub use transport::{
     AbuseReporterTransport, HttpAbuseReporterTransport, MockAbuseReporterTransport,
 };

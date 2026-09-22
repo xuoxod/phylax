@@ -80,6 +80,8 @@ struct AbuseReportingConfigToml {
     enabled: Option<bool>,
     dry_run: Option<bool>,
     api_key: Option<String>,
+    webhook_url: Option<String>,
+    webhook_auth: Option<String>,
 }
 
 #[derive(serde::Deserialize, Debug, Default)]
@@ -135,6 +137,14 @@ struct ServeArgs {
     /// AbuseIPDB API key (reads from ABUSEIPDB_API_KEY env if not specified)
     #[arg(long, env = "ABUSEIPDB_API_KEY")]
     abuseipdb_key: Option<String>,
+
+    /// Enterprise Webhook destination URL for SIEM, Datadog, Slack, or internal SOC
+    #[arg(long, env = "PHYLAX_WEBHOOK_URL")]
+    webhook_url: Option<String>,
+
+    /// Optional webhook authorization header (e.g. "Bearer token" or "ApiKey secret")
+    #[arg(long, env = "PHYLAX_WEBHOOK_AUTH")]
+    webhook_auth: Option<String>,
 
     /// Autonomous in-memory maintenance sweep interval in seconds
     #[arg(long)]
@@ -235,6 +245,8 @@ async fn run_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Error>> {
         abuse_reporting_enabled,
         abuse_dry_run,
         abuseipdb_key,
+        webhook_url,
+        webhook_auth,
     ) = {
         let mut config_file: Option<PhylaxConfigFile> = None;
         if let Some(path) = &args.config {
@@ -399,6 +411,26 @@ async fn run_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Error>> {
             .and_then(|a| a.dry_run)
             .unwrap_or(true);
 
+        let webhook_url = args
+            .webhook_url
+            .or_else(|| {
+                config_file
+                    .as_ref()
+                    .and_then(|c| c.abuse_reporting.as_ref())
+                    .and_then(|a| a.webhook_url.clone())
+            })
+            .filter(|k| !k.is_empty());
+
+        let webhook_auth = args
+            .webhook_auth
+            .or_else(|| {
+                config_file
+                    .as_ref()
+                    .and_then(|c| c.abuse_reporting.as_ref())
+                    .and_then(|a| a.webhook_auth.clone())
+            })
+            .filter(|k| !k.is_empty());
+
         (
             listen,
             upstream,
@@ -416,6 +448,8 @@ async fn run_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Error>> {
             abuse_reporting_enabled,
             abuse_dry_run,
             abuseipdb_key,
+            webhook_url,
+            webhook_auth,
         )
     };
 
@@ -427,26 +461,32 @@ async fn run_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Error>> {
         .enable_pow(pow_difficulty > 0);
 
     if tarpit_enabled {
-        let mut tarpit_config = TarpitConfig::default();
-        tarpit_config.max_concurrent_tarpits = tarpit_max_concurrent;
+        let tarpit_config = TarpitConfig {
+            max_concurrent_tarpits: tarpit_max_concurrent,
+            ..Default::default()
+        };
         builder = builder.with_tarpit(tarpit_config);
     }
 
     if quarantine_enabled {
-        let mut quarantine_config = QuarantineConfig::default();
-        quarantine_config.infraction_threshold = quarantine_threshold;
-        quarantine_config.quarantine_duration_ms = quarantine_duration_ms;
+        let quarantine_config = QuarantineConfig {
+            infraction_threshold: quarantine_threshold,
+            quarantine_duration_ms,
+            ..Default::default()
+        };
         builder = builder.with_quarantine(quarantine_config);
         builder = builder.with_adaptive_pow(AdaptivePowConfig::default());
     }
 
     #[cfg(feature = "abuse-reporting")]
     if abuse_reporting_enabled {
-        let is_dry = abuse_dry_run || abuseipdb_key.is_none();
+        let is_dry = abuse_dry_run || (abuseipdb_key.is_none() && webhook_url.is_none());
         let informant_config = phylax::abuse_reporting::InformantConfig {
             enabled: true,
             dry_run: is_dry,
             api_key: abuseipdb_key.clone(),
+            webhook_url: webhook_url.clone(),
+            webhook_auth: webhook_auth.clone(),
             cooldown: phylax::abuse_reporting::CooldownConfig::default(),
         };
         builder = builder.with_abuse_reporting(informant_config);
@@ -454,6 +494,15 @@ async fn run_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Error>> {
             "  📡 Collaborative Abuse Reporting: ENABLED (Dry-Run: {})",
             is_dry
         );
+        if let Some(ref key) = abuseipdb_key {
+            println!(
+                "     • AbuseIPDB Sink: Armed (Key: ...{})",
+                &key[key.len().saturating_sub(6)..]
+            );
+        }
+        if let Some(ref url) = webhook_url {
+            println!("     • Generic Webhook Sink: Armed ({})", url);
+        }
     }
 
     let pipeline = Arc::new(builder.build());
@@ -790,6 +839,8 @@ async fn run_check_ip(args: CheckIpArgs) -> Result<(), Box<dyn std::error::Error
             enabled: true,
             dry_run: false,
             api_key: Some(key.clone()),
+            webhook_url: None,
+            webhook_auth: None,
             cooldown: phylax::abuse_reporting::CooldownConfig::default(),
         };
         let engine = phylax::abuse_reporting::InformantEngine::new(config, Arc::new(transport));
@@ -806,7 +857,11 @@ async fn run_check_ip(args: CheckIpArgs) -> Result<(), Box<dyn std::error::Error
                     "  • ISP:                  {}",
                     rep.isp.as_deref().unwrap_or("N/A")
                 );
-                println!("  • Is Tor Exit:          {}", rep.is_tor);
+                println!(
+                    "  • Domain:               {}",
+                    rep.domain.as_deref().unwrap_or("N/A")
+                );
+                println!("  • Is Tor Node:          {}", rep.is_tor);
                 println!("  • Is Whitelisted:       {}", rep.is_whitelisted);
             }
             Err(e) => {
@@ -874,6 +929,12 @@ dry_run = true
 
 # AbuseIPDB v2 API key (or specify via ABUSEIPDB_API_KEY environment variable)
 api_key = ""
+
+# Generic Webhook destination URL for SIEM, Datadog, Slack, or internal SOC
+# webhook_url = "https://siem.example.com/api/v1/incidents"
+
+# Webhook Authorization header (e.g. "Bearer secret-token" or "ApiKey xyz")
+# webhook_auth = ""
 "#;
 
     std::fs::write(&args.output, config_content)?;

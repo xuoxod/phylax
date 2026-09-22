@@ -22,6 +22,12 @@ pub enum AbuseReportError {
 
     #[error("Serialization / JSON error: {0}")]
     Serialization(String),
+
+    #[error("Configuration error: {0}")]
+    Config(String),
+
+    #[error("All sinks failed in MultiSink: {0}")]
+    MultiSinkFailure(String),
 }
 
 #[derive(Error, Debug, Clone)]

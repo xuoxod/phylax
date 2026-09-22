@@ -1,9 +1,13 @@
 //! # Informant Orchestration Pipeline & Opt-in Engine
-//! One-Job: Coordinate opt-in gates, dry-run simulations, cooldown verification, and dispatch.
+//! One-Job: Coordinate opt-in gates, dry-run simulations, cooldown verification, and multi-sink dispatch.
 
-use crate::abuse_reporting::abuseipdb::AbuseIpDbReportPayload;
+use crate::abuse_reporting::abuseipdb::AbuseIpDbCheckResponse;
 use crate::abuse_reporting::cooldown::{CooldownConfig, ReportCooldownGovernor};
 use crate::abuse_reporting::dossier::{DossierFormatter, ForensicDossier};
+use crate::abuse_reporting::error::AbuseReportError;
+use crate::abuse_reporting::sink::{
+    AbuseIpDbSink, GenericWebhookSink, IncidentSink, MultiSink,
+};
 use crate::abuse_reporting::transport::{AbuseReporterTransport, HttpAbuseReporterTransport};
 use std::sync::Arc;
 
@@ -16,6 +20,10 @@ pub struct InformantConfig {
     pub dry_run: bool,
     /// AbuseIPDB API key (if live dispatch enabled)
     pub api_key: Option<String>,
+    /// Generic Webhook destination URL (for enterprise SIEM, Datadog, Slack, Splunk)
+    pub webhook_url: Option<String>,
+    /// Optional authorization header value for webhook (e.g. "Bearer token" or "ApiKey secret")
+    pub webhook_auth: Option<String>,
     /// Cooldown & rate limiting configuration
     pub cooldown: CooldownConfig,
 }
@@ -26,6 +34,8 @@ impl Default for InformantConfig {
             enabled: false,
             dry_run: true,
             api_key: None,
+            webhook_url: None,
+            webhook_auth: None,
             cooldown: CooldownConfig::default(),
         }
     }
@@ -33,9 +43,10 @@ impl Default for InformantConfig {
 
 impl InformantConfig {
     /// Discovers configuration from environment variables or standard reference paths:
-    /// - Checks `ABUSEIPDB_API_KEY` environment variable
-    /// - Checks `~/Documents/reference/abuse_ip_db/api-key.txt` reference file
-    /// If an API key is discovered, live automated reporting is enabled.
+    /// - Checks `ABUSEIPDB_API_KEY` environment variable or `~/Documents/reference/abuse_ip_db/api-key.txt`
+    /// - Checks `PHYLAX_WEBHOOK_URL` / `RMT_WEBHOOK_URL` for generic enterprise sinks
+    ///
+    /// If an API key or webhook endpoint is discovered, automated reporting is armed by default.
     pub fn from_env_or_default() -> Self {
         let key = std::env::var("ABUSEIPDB_API_KEY")
             .ok()
@@ -50,11 +61,23 @@ impl InformantConfig {
                     .filter(|s| !s.is_empty())
             });
 
+        let webhook_url = std::env::var("PHYLAX_WEBHOOK_URL")
+            .or_else(|_| std::env::var("RMT_WEBHOOK_URL"))
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+
+        let webhook_auth = std::env::var("PHYLAX_WEBHOOK_AUTH")
+            .or_else(|_| std::env::var("RMT_WEBHOOK_AUTH"))
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+
         let dry_run = std::env::var("RMT_ABUSE_REPORTING_DRY_RUN")
             .map(|v| v == "true" || v == "1")
             .unwrap_or(false);
 
-        let enabled = key.is_some()
+        let enabled = (key.is_some() || webhook_url.is_some())
             && std::env::var("RMT_ABUSE_REPORTING_ENABLED")
                 .map(|v| v != "false" && v != "0")
                 .unwrap_or(true);
@@ -63,6 +86,8 @@ impl InformantConfig {
             enabled,
             dry_run,
             api_key: key,
+            webhook_url,
+            webhook_auth,
             cooldown: CooldownConfig::default(),
         }
     }
@@ -71,7 +96,7 @@ impl InformantConfig {
 /// Result of evaluating an abusive incident
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InformantVerdict {
-    /// Incident successfully reported to upstream threat intelligence
+    /// Incident successfully reported to upstream threat intelligence or enterprise sink
     Reported { ip: String, confidence_score: u32 },
     /// Incident verified and formatted in dry-run mode
     DryRunReported {
@@ -87,18 +112,20 @@ pub enum InformantVerdict {
     Error(String),
 }
 
-/// Sovereign Informant Engine orchestrating threat reporting
+/// Sovereign Informant Engine orchestrating threat reporting across one or multiple sinks
 #[derive(Clone)]
 pub struct InformantEngine {
     config: InformantConfig,
     cooldown_governor: ReportCooldownGovernor,
-    transport: Arc<dyn AbuseReporterTransport>,
+    sink: Arc<dyn IncidentSink>,
+    transport: Option<Arc<dyn AbuseReporterTransport>>,
 }
 
 impl std::fmt::Debug for InformantEngine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("InformantEngine")
             .field("config", &self.config)
+            .field("sink_name", &self.sink.name())
             .field(
                 "daily_reports_count",
                 &self.cooldown_governor.daily_reports_count(),
@@ -108,12 +135,61 @@ impl std::fmt::Debug for InformantEngine {
 }
 
 impl InformantEngine {
+    /// Helper to construct the appropriate IncidentSink from InformantConfig
+    fn build_sink_from_config(
+        config: &InformantConfig,
+        transport: Arc<dyn AbuseReporterTransport>,
+    ) -> Arc<dyn IncidentSink> {
+        let mut sinks: Vec<Arc<dyn IncidentSink>> = Vec::new();
+
+        if let Some(ref key) = config.api_key {
+            if !key.trim().is_empty() {
+                sinks.push(Arc::new(AbuseIpDbSink::new(key.clone(), transport.clone())));
+            }
+        }
+
+        if let Some(ref url) = config.webhook_url {
+            if !url.trim().is_empty() {
+                let mut headers = Vec::new();
+                if let Some(ref auth) = config.webhook_auth {
+                    if !auth.trim().is_empty() {
+                        headers.push(("Authorization".to_string(), auth.clone()));
+                    }
+                }
+                sinks.push(Arc::new(GenericWebhookSink::new(url.clone(), headers)));
+            }
+        }
+
+        if sinks.is_empty() {
+            // Default to AbuseIpDbSink (will yield clean error if key missing upon live dispatch)
+            Arc::new(AbuseIpDbSink::new(String::new(), transport))
+        } else if sinks.len() == 1 {
+            sinks.remove(0)
+        } else {
+            Arc::new(MultiSink::new(sinks))
+        }
+    }
+
+    /// Primary constructor supporting transport abstraction (e.g. for AbuseIPDB & testing)
     pub fn new(config: InformantConfig, transport: Arc<dyn AbuseReporterTransport>) -> Self {
+        let sink = Self::build_sink_from_config(&config, transport.clone());
         let cooldown_governor = ReportCooldownGovernor::new(config.cooldown.clone());
         Self {
             config,
             cooldown_governor,
-            transport,
+            sink,
+            transport: Some(transport),
+        }
+    }
+
+    /// Enterprise constructor allowing injection of arbitrary IncidentSink (e.g. Webhook, Syslog, MultiSink)
+    pub fn with_sink(config: InformantConfig, sink: Arc<dyn IncidentSink>) -> Self {
+        let cooldown_governor = ReportCooldownGovernor::new(config.cooldown.clone());
+        Self {
+            config,
+            cooldown_governor,
+            sink,
+            transport: None,
         }
     }
 
@@ -162,42 +238,25 @@ impl InformantEngine {
             };
         }
 
-        // 4. Validate API Key for live dispatch
-        let api_key = match self.config.api_key.as_deref() {
-            Some(key) if !key.trim().is_empty() => key,
-            _ => {
-                let err_msg =
-                    "Abuse reporting is enabled but no valid AbuseIPDB API key was provided"
-                        .to_string();
-                tracing::warn!("⚠️ [INFORMANT] {}", err_msg);
-                return InformantVerdict::Error(err_msg);
-            }
-        };
-
-        let payload = AbuseIpDbReportPayload {
-            ip: dossier.client_ip.clone(),
-            categories,
-            comment,
-        };
-
-        // 5. Dispatch via configured transport
-        match self.transport.submit_report(&payload, api_key).await {
-            Ok(resp) => {
+        // 4. Dispatch via configured sink
+        match self.sink.dispatch(dossier).await {
+            Ok(receipt) => {
                 tracing::info!(
-                    "📡 [INFORMANT] Successfully reported abusive IP '{}' (Confidence Score: {})",
-                    resp.ip_address,
-                    resp.abuse_confidence_score
+                    "📡 [INFORMANT] Successfully dispatched incident for IP '{}' via {} ({})",
+                    dossier.client_ip,
+                    receipt.sink_name,
+                    receipt.detail
                 );
                 self.cooldown_governor
                     .record_reported(&dossier.client_ip, dossier.timestamp_ms);
                 InformantVerdict::Reported {
-                    ip: resp.ip_address,
-                    confidence_score: resp.abuse_confidence_score,
+                    ip: dossier.client_ip.clone(),
+                    confidence_score: 0,
                 }
             }
             Err(e) => {
                 tracing::error!(
-                    "❌ [INFORMANT] Failed to submit report for IP '{}': {}",
+                    "❌ [INFORMANT] Failed to dispatch report for IP '{}': {}",
                     dossier.client_ip,
                     e
                 );
@@ -214,19 +273,20 @@ impl InformantEngine {
         &self.config
     }
 
+    pub fn sink(&self) -> &Arc<dyn IncidentSink> {
+        &self.sink
+    }
+
     /// Query AbuseIPDB reputation metadata for a given IP address
-    pub async fn check_ip(
-        &self,
-        ip: &str,
-    ) -> Result<
-        crate::abuse_reporting::abuseipdb::AbuseIpDbCheckResponse,
-        crate::abuse_reporting::error::AbuseReportError,
-    > {
+    pub async fn check_ip(&self, ip: &str) -> Result<AbuseIpDbCheckResponse, AbuseReportError> {
+        let transport = self.transport.as_ref().ok_or_else(|| {
+            AbuseReportError::Config("No AbuseIPDB transport available for check_ip".to_string())
+        })?;
         let api_key = match self.config.api_key.as_deref() {
             Some(key) if !key.trim().is_empty() => key,
-            _ => return Err(crate::abuse_reporting::error::AbuseReportError::MissingApiKey),
+            _ => return Err(AbuseReportError::MissingApiKey),
         };
-        self.transport.check_ip(ip, api_key).await
+        transport.check_ip(ip, api_key).await
     }
 }
 
@@ -234,6 +294,7 @@ impl InformantEngine {
 mod tests {
     use super::*;
     use crate::abuse_reporting::category::AbuseCategory;
+    use crate::abuse_reporting::sink::MockIncidentSink;
     use crate::abuse_reporting::transport::MockAbuseReporterTransport;
 
     #[tokio::test]
@@ -242,6 +303,8 @@ mod tests {
             enabled: true,
             dry_run: false,
             api_key: None,
+            webhook_url: None,
+            webhook_auth: None,
             cooldown: CooldownConfig::default(),
         };
         let mock = Arc::new(MockAbuseReporterTransport::new());
@@ -262,11 +325,42 @@ mod tests {
         assert!(matches!(verdict, InformantVerdict::Error(_)));
     }
 
+    #[tokio::test]
+    async fn test_pipeline_with_generic_mock_sink_works_seamlessly() {
+        let config = InformantConfig {
+            enabled: true,
+            dry_run: false,
+            api_key: None,
+            webhook_url: None,
+            webhook_auth: None,
+            cooldown: CooldownConfig::default(),
+        };
+        let mock_sink = Arc::new(MockIncidentSink::new());
+        let engine = InformantEngine::with_sink(config, mock_sink.clone());
+
+        let dossier = ForensicDossier {
+            client_ip: "192.0.2.45".to_string(),
+            timestamp_ms: 2000,
+            target_uri: "/api/login".to_string(),
+            http_method: "POST".to_string(),
+            category: AbuseCategory::CredentialStuffing,
+            trapped_field: Some("password_decoy".to_string()),
+            user_agent: Some("CustomBot/1.0".to_string()),
+            evidence_notes: "Automated credential burst".to_string(),
+        };
+
+        let verdict = engine.process_incident(&dossier).await;
+        assert!(matches!(verdict, InformantVerdict::Reported { .. }));
+        assert_eq!(mock_sink.recorded_dossiers().len(), 1);
+        assert_eq!(mock_sink.recorded_dossiers()[0].client_ip, "192.0.2.45");
+    }
+
     #[test]
     fn test_default_informant_config_is_safely_disabled() {
         let def = InformantConfig::default();
         assert!(!def.enabled);
         assert!(def.dry_run);
         assert!(def.api_key.is_none());
+        assert!(def.webhook_url.is_none());
     }
 }
