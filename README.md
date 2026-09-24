@@ -41,10 +41,11 @@
 
 ---
 
-## Two Ways to Deploy
+## Three Ways to Deploy
 
 | Mode | Target User | Mechanism | Setup Time |
 |---|---|---|---|
+| **[Propylea Sovereign L7 Proxy](https://github.com/xuoxod/propylea)** | Multi-domain edge, Caddy/Nginx replacement | Sovereign pure-Rust reverse proxy, SNI TLS multiplexer & memory governor | `60 seconds` |
 | **[Standalone WAF Proxy Daemon](#1-standalone-waf-reverse-proxy-zero-rust-required)** | Node.js, Python, Go, PHP, WordPress, Ruby, Java | Sits in front of any HTTP service as a reverse proxy shield | `30 seconds` |
 | **[Native Rust Library](#2-native-rust-library-integration)** | Axum, Actix-web, Tower, Hyper | Embedded directly into your Rust web service binary | `2 minutes` |
 
