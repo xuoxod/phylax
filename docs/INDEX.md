@@ -14,18 +14,18 @@ flowchart TD
     HOME["📖 README.md<br/>(Quickstart & Showcase)"] --> INDEX["🗺️ docs/INDEX.md<br/>(Master OJP Navigation)"]
     
     subgraph CoreFoundations["1. Core Concepts & Architecture"]
-        INDEX --> ARCH["01_ARCHITECTURE_AND_COST_HIERARCHY.md<br/>• 12-Layer Cost Hierarchy<br/>• Zero-Telemetry Principles<br/>• Sub-Microsecond Execution"]
-        ARCH --> DECEPT["02_STEALTH_DECEPTION_AND_ACTIVE_DEFENSE.md<br/>• Silent Neutralization vs 403<br/>• Synthetic 201 Black Holes<br/>• Perimeter Ghosting (404)"]
+        INDEX --> ARCH["01_ARCHITECTURE_AND_COST_HIERARCHY.md<br/>• 13-Layer Cost Hierarchy<br/>• Sub-Microsecond Execution Budget<br/>• Layer 0.5 Decoy Honeyroutes & Layer 13 Harvester"]
+        ARCH --> DECEPT["02_STEALTH_DECEPTION_AND_ACTIVE_DEFENSE.md<br/>• Silent Neutralization vs 403 Leakage<br/>• Synthetic 201 Black Holes<br/>• Reverse Slowloris Tarpit & PoW Ratcheting"]
     end
 
     subgraph ProductionBattlefield["2. Battle-Tested Showcase"]
-        DECEPT --> MATRIX["03_CASE_STUDY_MATRIX_PRODUCTION.md<br/>• Real-World Showcase: matrix.rmediatech.com<br/>• WebRTC SFU & Mesh Protection<br/>• In-Process Axum Zero-Daemon Engine"]
+        DECEPT --> MATRIX["03_CASE_STUDY_MATRIX_PRODUCTION.md<br/>• Real-World Showcase: matrix.rmediatech.com<br/>• Dual-Shield Edge: Propylea L7 + In-Process Phylax<br/>• Real Crawler & Exploit Spray Telemetry"]
     end
 
     subgraph IntegrationAndOps["3. Implementation & Operations"]
-        MATRIX --> INTEGRATE["04_INTEGRATION_AND_FRAMEWORK_GUIDE.md<br/>• Axum / Actix-web / Tower<br/>• Standalone Reverse Proxy WAF<br/>• Client-Side Vanilla JS Integration"]
-        INTEGRATE --> ABUSE["05_AUTONOMOUS_ABUSE_INTELLIGENCE.md<br/>• Optional AbuseIPDB v2 Reporting<br/>• 24h Sliding Window Cooldown<br/>• Zero-Config Key Discovery"]
-        ABUSE --> RUNBOOK["06_PRODUCTION_DEPLOYMENT_AND_RUNBOOK.md<br/>• Systemd & Caddyfile Configurations<br/>• Hardware Sizing & Benchmarks<br/>• Epilogue & Security Manifesto"]
+        MATRIX --> INTEGRATE["04_INTEGRATION_AND_FRAMEWORK_GUIDE.md<br/>• Axum / Actix-web / Tower<br/>• Standalone Reverse Proxy & Propylea L7<br/>• Threat Candidate Lifecycle State Machine"]
+        INTEGRATE --> ABUSE["05_AUTONOMOUS_ABUSE_INTELLIGENCE.md<br/>• Optional AbuseIPDB v2 Reporting<br/>• 15-Minute Sliding Window Rate Governor<br/>• Forensic Dossier & SIEM Webhook Dispatch"]
+        ABUSE --> RUNBOOK["06_PRODUCTION_DEPLOYMENT_AND_RUNBOOK.md<br/>• Systemd & Distro-Agnostic Service Manager<br/>• Autonomous 60s Hygiene & Memory Reclamation<br/>• Hardware Sizing & Empirical Benchmarks"]
     end
 ```
 
@@ -35,14 +35,26 @@ flowchart TD
 
 | # | Chapter | Key Topics | Target Audience |
 |---|---|---|---|
-| **01** | [**Architecture & Cost Hierarchy**](01_ARCHITECTURE_AND_COST_HIERARCHY.md) | 12 defensive layers, nanosecond radix routing, Bloom filters, fail-fast mechanics, zero memory leaks. | Architects, Rust Developers |
-| **02** | [**Stealth Deception & Active Defense**](02_STEALTH_DECEPTION_AND_ACTIVE_DEFENSE.md) | Why 403 Forbidden tips off attackers, Deceptive Black Holes (`201 Created`), generic `401` login masking, stealth `404` drops. | Security Engineers, App Developers |
-| **03** | [**Case Study: Matrix Real-Time WebRTC Mesh**](03_CASE_STUDY_MATRIX_PRODUCTION.md) | First real-world production deployment: [`matrix.rmediatech.com`](https://matrix.rmediatech.com). Latency-free WebSockets, WebRTC `TurnGuard`, honeypot traps. | Engineering Leads, CTOs |
-| **04** | [**Integration & Framework Guide**](04_INTEGRATION_AND_FRAMEWORK_GUIDE.md) | Drop-in Axum middleware, Actix-web examples, Standalone WAF Proxy for Python/Go/Node, frontend `phylax.js`. | Full-Stack Developers |
-| **05** | [**Autonomous Abuse Intelligence**](05_AUTONOMOUS_ABUSE_INTELLIGENCE.md) | Non-blocking AbuseIPDB reporting, per-IP rate governors, XARF formatting, environment discovery. | SecOps, DevOps |
-| **06** | [**Production Deployment & Runbook**](06_PRODUCTION_DEPLOYMENT_AND_RUNBOOK.md) | Systemd units, Caddy reverse proxy integration, log rotation, benchmark verification, epilogue. | Sysadmins, SREs |
+| **01** | [**Architecture & Cost Hierarchy**](01_ARCHITECTURE_AND_COST_HIERARCHY.md) | 13 defensive layers + Layer 0.5 decoy honeyroutes, Layer 13 emerging threat harvester, nanosecond Radix CIDR trees, Bloom filters, fail-fast cost hierarchy. | Architects, Security Engineers |
+| **02** | [**Stealth Deception & Active Defense**](02_STEALTH_DECEPTION_AND_ACTIVE_DEFENSE.md) | Why 403 Forbidden leaks intel, Deceptive Black Holes (`201 Created`), login timing equalization, reverse Slowloris socket-hostage mode, quadratic PoW ratcheting. | Security Researchers, App Developers |
+| **03** | [**Case Study: Matrix Real-Time WebRTC Mesh**](03_CASE_STUDY_MATRIX_PRODUCTION.md) | Battle-tested production deployment: [`matrix.rmediatech.com`](https://matrix.rmediatech.com). Dual-Shield edge topology with `propylea`, zero-latency WebRTC `TurnGuard`, real-world crawler telemetry. | Engineering Leads, CTOs |
+| **04** | [**Integration & Framework Guide**](04_INTEGRATION_AND_FRAMEWORK_GUIDE.md) | 3 deployment paths: In-process Axum/Actix middleware, Propylea L7 reverse proxy gateway, standalone WAF daemon; frontend `phylax.js` helper. | Full-Stack Developers, SREs |
+| **05** | [**Autonomous Abuse Intelligence**](05_AUTONOMOUS_ABUSE_INTELLIGENCE.md) | Non-blocking AbuseIPDB v2 reporting, multi-subnet forensic dossiers, per-IP sliding window token governors, zero-config credential discovery. | SecOps, Incident Responders |
+| **06** | [**Production Deployment & Runbook**](06_PRODUCTION_DEPLOYMENT_AND_RUNBOOK.md) | Systemd units, distro-agnostic service script, autonomous 60s memory hygiene pass (`malloc_trim`), live traffic tuning, production epilogue. | Sysadmins, DevOps |
 
 ---
+
+## 🏛️ Sovereign Defense Topology: Phylax vs. Propylea vs. Cloud WAF
+
+| Defensive Dimension | `phylax` (Native Crate) | `propylea` (L7 Gateway) | Commercial Cloud WAF |
+|---|---|---|---|
+| **Placement Boundary** | In-Process inside Application | Public Edge Reverse Proxy | Third-Party External Network |
+| **Evaluation Latency** | **`< 950 nanoseconds`** | **`< 15 microseconds`** | 20 ms – 80 ms (RTT jitter) |
+| **Data Privacy** | **Zero Telemetry** (100% Sovereign) | **Zero Telemetry** (100% Sovereign) | Plaintext TLS decrypted externally |
+| **Reconnaissance Countermeasure** | Stealth Deception & Black Holes | Stealth 404 & Active Decoy Traps | Explicit 403 / 429 (fingerprintable) |
+| **Zero-Day Discovery** | Multi-Subnet Correlation (Layer 13) | Upstream 404 Feedback Loop | Manual signature / CVE patch delay |
+| **Hostile Compute Burn** | Reverse Slowloris + Adaptive PoW | Early Edge Socket Drop | None (attacker burns your bill) |
+| **Infrastructure Cost** | **$0** (Compiled in application) | **$0** (Standalone Rust binary) | Recurring monthly / bandwidth fees |
 
 ## 🚀 Quick Navigation Links
 

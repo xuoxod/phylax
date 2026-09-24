@@ -78,6 +78,30 @@ flowchart TD
 | **12** | `cache_shield` | Zero-lock atomic memory cache (ETag / 304) | `~20 ns` | Lock-free concurrent atomic cache |
 | **13** | `threat_harvester` | Autonomous Zero-Day & CVE Campaign Correlator | `~25 ns` | Mathematical multi-subnet sliding window |
 
+### Empirical Execution & Latency Budget Waterfall
+
+The following execution waterfall illustrates how all 13 defensive layers execute in **$< 1\text{ microsecond}$** total combined latency, contrasting with traditional cloud WAFs that introduce 20,000 to 80,000 microseconds (20ms–80ms) of network jitter:
+
+```mermaid
+gantt
+    title Phylax In-Memory Execution Budget (<985ns Total)
+    dateFormat X
+    axisFormat %s ns
+    section Perimeter (Bitwise)
+    0. Autonomous Quarantine (10ns)   :active, l0, 0, 10
+    0.5 Decoy URI Honeyroute (8ns)    :active, l05, 10, 18
+    1. Honeypot DOM Trap (5ns)        :active, l1, 18, 23
+    2. Subnet Radix Trie (15ns)       :active, l2, 23, 38
+    section Sanitization & Bloom
+    3. Email Dot Sanitizer (30ns)     :crit, l3, 38, 68
+    6. Breached Password Bloom (25ns) :crit, l6, 68, 93
+    7. Account Velocity Counter (40ns):crit, l7, 93, 133
+    section Cryptography & Cadence
+    8. Impossible Travel Haversine (150ns) :l8, 133, 283
+    4. HMAC Pacing Check (200ns)      :l4, 283, 483
+    5. SHA-256 Micro-PoW (500ns)      :l5, 483, 983
+```
+
 ---
 
 ## 3. Lock-Free Concurrency & Autonomous Hygiene

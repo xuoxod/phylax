@@ -11,14 +11,38 @@ Whether you're writing a new Rust web service or protecting an existing Node.js,
 
 ```mermaid
 flowchart TD
-    START{"What is your backend technology?"}
-    START -- "Rust (Axum, Actix, Tower)" --> RUST["Path A: Native In-Process Library<br/>• Zero daemons, zero extra hops<br/>• Sub-microsecond memory execution<br/>• Copy-pasteable into your handlers"]
+    START{"What is your deployment scenario?"}
+    START -- "Rust Backend (Axum, Actix, Tower)" --> RUST["Path A: Native In-Process Library<br/>• Zero daemons, zero extra hops<br/>• Sub-microsecond memory execution<br/>• Embedded in application state"]
     START -- "Node.js, Python, Go, PHP, WordPress" --> PROXY["Path B: Standalone WAF Proxy Daemon<br/>• Sits in front of any port<br/>• Zero code changes to your backend<br/>• Run via binary or Docker in 30 seconds"]
+    START -- "Multi-Domain Edge / Caddy Replacement" --> PROPYLEA["Path C: Propylea Sovereign L7 Proxy<br/>• Multi-domain SNI TLS multiplexer<br/>• Memory governor & malloc_trim<br/>• Closed-loop upstream 404 feedback"]
 ```
 
 ---
 
-## 2. Path A: Native Rust Setup (Axum / Actix-web / Tower)
+## 2. Threat Candidate Lifecycle State Machine (Layer 13)
+
+When protecting an application against zero-day discovery scans, unmapped routes are evaluated by `ThreatHarvesterEngine` according to the following mathematical finite-state machine:
+
+```mermaid
+stateDiagram-v2
+    [*] --> UnmappedProbe : Upstream 404 / Rogue Route
+    UnmappedProbe --> Canonicalize : Extract SubnetKey (/24 IPv4 or /48 IPv6)
+    Canonicalize --> QuotaCheck : Verify Subnet Quota
+    QuotaCheck --> DropSilently : Subnet Quota Exceeded (≥25 paths)
+    QuotaCheck --> TrackCandidate : Subnet Within Quota
+    TrackCandidate --> Accumulate : Increment Hit Count & Subnet Set
+    Accumulate --> EvaluateThreshold : Subnets Observed in 1-Hr Window
+    EvaluateThreshold --> Expired : Inactivity > 1 Hour
+    Expired --> [*] : Pruned by MaintenanceManager
+    EvaluateThreshold --> Promote : Distinct Subnets ≥ 3
+    Promote --> DecoyTrie : Inject exact trap into DecoyUriSentinel (<15ns)
+    DecoyTrie --> ActiveInterception : Intercept all subsequent probes globally
+    ActiveInterception --> [*]
+```
+
+---
+
+## 3. Path A: Native Rust Setup (Axum / Actix-web / Tower)
 
 ### Step 1: Add Dependency to `Cargo.toml`
 
@@ -248,7 +272,38 @@ Now route your public traffic through port `3000` (or port `80`). Phylax will au
 
 ---
 
-## 4. 3-Command Verification Checklist (cURL Tests)
+## 4. Path C: Propylea Sovereign L7 Reverse Proxy (Multi-Domain Edge)
+
+For multi-domain edge deployments, API gateways, or replacing Caddy / Nginx, deploy **[Propylea](https://github.com/xuoxod/propylea)**—the sovereign pure-Rust L7 reverse proxy powered by `hyper 1.4`, `tokio-rustls 0.26`, and native `phylax` active defense:
+
+```toml
+# /etc/propylea/propylea.toml
+[server]
+bind_addr = "0.0.0.0:443"
+redirect_http = true
+http_bind_addr = "0.0.0.0:80"
+
+[tls]
+cert_path = "/etc/letsencrypt/live/example.com/fullchain.pem"
+key_path = "/etc/letsencrypt/live/example.com/privkey.pem"
+
+[[routes]]
+host = "api.example.com"
+upstream = "127.0.0.1:8080"
+
+[security]
+enable_defense = true
+```
+
+### Closed-Loop Zero-Day Harvester Feedback:
+When an upstream application returns `404 Not Found` on an unmapped endpoint, `propylea` captures the anomalous URI and feeds it directly into `phylax::ThreatHarvesterEngine`:
+1. Probes from multiple distinct `/24` (IPv4) or `/48` (IPv6) subnets are correlated in real time.
+2. Upon reaching threshold, the zero-day path is elevated into Propylea's live decoy trap trie in **$< 15\text{ ns}$**.
+3. All future probes across the internet are dropped at the TLS boundary with a stealth 404, consuming **zero upstream CPU or database transactions**.
+
+---
+
+## 5. 3-Command Verification Checklist (cURL Tests)
 
 Test and verify your defense in 30 seconds:
 
@@ -283,7 +338,7 @@ curl -i http://127.0.0.1:3000/api/auth/register \
 
 ---
 
-## 5. Self-Service Troubleshooting & FAQ
+## 6. Self-Service Troubleshooting & FAQ
 
 #### Q: Do I need Redis, PostgreSQL, or any external database to run Phylax?
 **A:** No. `phylax` is **100% in-process and memory-safe**. All rate limiting, CIDR routing, honeypot validation, and Bloom filter checks run directly in RAM using zero-allocation primitives.

@@ -193,7 +193,33 @@ Solved puzzle in 4.2ms. Nonce: 38291
 
 ---
 
-## 5. Epilogue: The Sovereign Security Manifesto
+## 5. Zero-Downtime Autonomous Self-Healing Mesh
+
+In high-concurrency 24/7 edge environments, `phylax` and `propylea` coordinate multi-engine state pruning and memory reclamation automatically:
+
+```mermaid
+flowchart TD
+    TICK["⏰ 60-Second Autonomous Timer"] --> MGR["MaintenanceManager::run_maintenance"]
+    
+    subgraph HygienePass["Zero-Lock State Pruning (<15µs)"]
+        MGR --> PRUNE_CIDR["Purge Expired Subnet Bans"]
+        MGR --> DECAY_POW["Decay PoW Infractions to Baseline"]
+        MGR --> EVICT_THREAT["Evict Stale Threat Candidates (Layer 13)"]
+    end
+    
+    HygienePass --> TRIM["libc::malloc_trim(0) Heap Deflation"]
+    TRIM --> METRICS["Telemetry & Audit Reporting"]
+    
+    subgraph Watchdog["Autonomous Watchdog Loop"]
+        WATCH["Heartbeat Probe (GET /healthz)"] --> CHECK{"Status 200 in <500µs?"}
+        CHECK -- Yes (Empirical: 80µs-128µs) --> OK["Healthy Operational State"]
+        CHECK -- Timeout / Crash --> RESTART["Systemd / OpenRC Auto-Restart (<1s)"]
+    end
+```
+
+---
+
+## 6. Epilogue: The Sovereign Security Manifesto
 
 The modern web does not need heavier middleboxes, invasive cloud proxies, or external data brokers inspecting private packets.
 

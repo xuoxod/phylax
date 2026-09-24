@@ -95,11 +95,44 @@ Automated vulnerability scanners (Nuclei, Nikto, Shodan, Censys) constantly craw
 - **Zero Human False Positives:** Legitimate end users never manually navigate to `/.azure/credentials` or `/pip.conf`.
 - **Stealth Action:** `phylax` intercepts the probe in `<10ns`, normalizes multi-slashes (`//.env`), returns a stealth `404 Not Found` to prevent rule fingerprinting, ratchets client IP adaptive PoW penalties, and autonomously dispatches forensic incident dossiers to AbuseIPDB (Category 15: *Hacking*, Category 21: *Web App Attack*) and registered SIEM webhooks.
 
+### Pillar 5: Autonomous Emerging Threat Harvesting (`phylax::threat_harvester`)
+Zero-day campaigns frequently probe unmapped routes before CVE disclosures are publicly indexed:
+- **Mathematical Multi-Subnet Sybil Defense:** A candidate path requires confirmation from at least 3 distinct `/24` IPv4 subnets (`198.51.100.0/24`) or `/48` IPv6 subnets (`2001:db8:beef::/48`) within a 1-hour sliding window.
+- **Anti-Fuzzing Containment:** Single-IP or single-subnet scanners spraying randomized dictionaries are quota-capped at 25 paths per subnet (`max_paths_per_subnet`), permanently preventing candidate memory bloat.
+- **Autonomous Elevation in `< 15ns`:** Once correlated, the engine automatically injects the path into the active `DecoyUriSentinel` trap catalog with zero human intervention. All subsequent probes from any IP globally are immediately dropped at the perimeter.
+- **CISA KEV / MITRE CVE Bulk Ingestion:** Pre-loads authoritative CVE catalogs (Log4j, Spring4Shell, Citrix Bleed, PHPUnit RCE) directly into active memory.
+
 ---
 
-## 4. The Asymmetric Tarpit: Reverse Slowloris
+## 4. The Asymmetric Tarpit: Reverse Slowloris & Quadratic PoW
 
-For relentless scanners that ignore HTTP status codes and spam endpoints indiscriminately, `phylax` features an asynchronous **Tarpit Governor** (`phylax::tarpit::TarpitGovernor`):
+For relentless scanners that ignore HTTP status codes and spam endpoints indiscriminately, `phylax` deploys **asymmetric economic friction**:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Attacker as Hostile Botnet Worker
+    participant Kernel as Linux Epoll / OS Socket
+    participant Tarpit as Phylax TarpitGovernor
+    participant PoW as Adaptive PoW Engine
+    
+    Attacker->>Kernel: Flood HTTP requests on trapped route
+    Kernel->>Tarpit: Hand off socket to Tarpit Slot (Held Hostage)
+    loop Every 3000ms for 45 Seconds
+        Tarpit-->>Attacker: Trickle 2 raw bytes (Keep-alive hostage)
+        Note over Attacker: Worker thread locked in 'await'! Socket pool exhausted!
+        Note over Tarpit: 0.00% CPU overhead (Async non-blocking timer)
+    end
+    Tarpit-->>Attacker: Close connection after 45s timeout
+    
+    Note over Attacker,PoW: Attacker retries from same IP range
+    Attacker->>PoW: Request next endpoint
+    PoW-->>Attacker: Quadratic PoW Challenge (18 to 22 bits difficulty)
+    Note over Attacker: Forced 100% CPU burn (4.19M hashes, ~15s delay)
+    Note over PoW: Verified in <500ns via single SHA-256 hash!
+```
+
+### Configuration:
 
 ```rust
 let governor = TarpitGovernor::new(TarpitConfig {

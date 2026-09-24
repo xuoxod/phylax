@@ -20,41 +20,52 @@ For **[`matrix.rmediatech.com`](https://matrix.rmediatech.com)**—a sovereign, 
 
 ---
 
-## 2. The Operational Challenge
+## 2. The Operational Challenge: Dual-Shield Topology
 
 ```mermaid
-flowchart LR
-    subgraph HostileInternet["Hostile Public Internet"]
-        BOT["🤖 Bot Registration Swarms"]
-        CRAWLER["🕷️ Datacenter / Tor Scrapers"]
-        LEECH["⚡ WebRTC Bandwidth Leechers"]
+flowchart TD
+    subgraph HostileInternet["Hostile Public Internet (Attack Waves)"]
+        BOT["🤖 ByteDance / Scraper Swarms (57.141.20.0/24)"]
+        CVE["💥 PHPUnit / Log4j RCE Probes"]
+        LEECH["⚡ WebRTC Relay Bandwidth Leechers"]
     end
 
-    subgraph MatrixEdge["Collaborative Edge Node"]
-        PROXY["TLS Edge Termination (Reverse Proxy)"]
+    subgraph NodeEdge["Sovereign Node 1 Edge Boundary"]
+        subgraph PropyleaGateway["Propylea L7 Edge Gateway (Port 80/443)"]
+            TLS["SNI Multiplexer & TLS 1.3 Termination"]
+            L05["Perimeter Decoy Trap Trie (<15ns)"]
+            ROUTER["Zero-Allocation Upstream Router"]
+        end
         
-        subgraph AxumProcess["Application Process (In-Memory)"]
-            PHYLAX["🛡️ Embedded Phylax Pipeline<br/>(<950ns Chained Evaluation)"]
-            AUTH["Auth Handlers<br/>(Register / Login)"]
-            MEDIA["WebRTC / SFU<br/>(TurnGuard)"]
-            DB[(Persistent State DB)]
+        subgraph MatrixApp["Matrix Sovereign SFU Daemon (Port 8082)"]
+            PHYLAX["In-Process Phylax Engine (<950ns)"]
+            WEBRTC["WebRTC Mesh & TurnGuard"]
+            AUTH["Stealth Deception Auth Handlers"]
+            HARVEST["Layer 13 Threat Harvester"]
+            DB[(SQLite WAL)]
         end
     end
 
-    BOT --> PROXY
-    CRAWLER --> PROXY
-    LEECH --> PROXY
-    PROXY --> PHYLAX
-    PHYLAX -- Human Pass --> AUTH
-    PHYLAX -- Human Pass --> MEDIA
+    BOT --> TLS
+    CVE --> TLS
+    LEECH --> TLS
+    TLS --> L05
+    L05 -- Known Decoy Trapped --> GHOST["Stealth 404 (0 Upstream Load)"]
+    L05 -- Legitimate Pass --> ROUTER
+    ROUTER --> PHYLAX
+    PHYLAX -- Clean Operator --> WEBRTC
+    PHYLAX -- Clean Operator --> AUTH
     AUTH --> DB
+    AUTH -- Unmapped 404 Probe --> HARVEST
+    HARVEST -- ≥3 Subnets Correlated --> L05
 ```
 
-### Threat Vectors Faced:
+### Threat Vectors Faced & Empirically Mitigated:
 1. **Automated Registration Floods:** Hostile credential-harvesting bots attempting to spam account registrations (`POST /api/v1/auth/register`) to exhaust database write transactions.
 2. **Credential Stuffing on Login:** Distributed brute-force attacks against user authentication endpoints (`POST /api/v1/auth/login`).
 3. **Bandwidth Leeching on Coturn Relays:** Scanners attempting to discover and abuse open WebRTC TURN credentials to proxy unrelated high-bandwidth traffic.
 4. **Targeted Reconnaissance:** Attackers using HTTP `403` and `429` responses to map active defenses and rotate residential proxy pools.
+5. **Distributed Zero-Day Probes:** Commercial search crawlers and hostile botnets (e.g. ByteDance / TikTok crawler pool `57.141.20.0/24`) probing `/null`, `.env`, and unmapped exploit routes.
 
 ---
 
