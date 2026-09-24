@@ -28,7 +28,9 @@ A fundamental vulnerability of naive security systems is **asymmetric compute ex
 flowchart TD
     REQ["Incoming Request"] --> L0["0. Autonomous Quarantine (~10ns)"]
     L0 -- Quarantined --> STOP["Silent Drop / 404 / Black Hole"]
-    L0 -- Pass --> L1["1. Honeypot Decoy Trap (~5ns)"]
+    L0 -- Pass --> L05["0.5 Decoy URI Honeyroutes (~5-10ns)"]
+    L05 -- Trapped --> STOP
+    L05 -- Pass --> L1["1. Honeypot Decoy Trap (~5ns)"]
     L1 -- Trapped --> STOP
     L1 -- Pass --> L2["2. Subnet Perimeter Guard (~15ns)"]
     L2 -- Hostile Subnet --> STOP
@@ -52,6 +54,8 @@ flowchart TD
     L11 -- Trickle Flood --> STOP
     L11 -- Pass --> L12["12. Zero-Lock Atomic Cache (~20ns)"]
     L12 -- Pass / 304 --> APP["Application Business Logic"]
+    APP -- Unmapped 404 --> L13["13. Emerging Threat Harvester (~25ns)"]
+    L13 -- Multi-Subnet Correlated (≥3 Subnets) --> ELEVATE["Elevate to Live Decoy Traps!"]
 ```
 
 ### Layer Specifications & Complexity
@@ -59,6 +63,7 @@ flowchart TD
 | Layer | Module | Primary Purpose | Cost / Latency | Data Structure |
 |---|---|---|---|---|
 | **0** | `autonomous_quarantine` | Instant CIDR block for repeat violators | `~10 ns` | `parking_lot::RwLock<HashMap<IpNet, u64>>` |
+| **0.5** | `decoy_uri` | Honeyroute reconnaissance traps (`.env`, `wp-login`) | `~5-10 ns` | `Arc<RwLock<HashMap<String, DecoyCategory>>>` |
 | **1** | `honeypot` | Invisible DOM decoy trap validation | `~5 ns` | Constant-time string scan |
 | **2** | `subnet_guard` | Tor exit nodes & bulletproof datacenter filter | `~15 ns` | Radix trie CIDR prefix tree |
 | **3** | `email_guard` | Bot dot-scattering & disposable domain sanitizer | `~30 ns` | Fast hash set + string transformation |
@@ -71,6 +76,7 @@ flowchart TD
 | **10** | `dist_guard` | Single-use binary download voucher guard | `~100 ns` | Byte-range scraping & replay governor |
 | **11** | `stream_guard` | L7 Slowloris & chunked trickle mitigation | `~50 ns` | Stream duration & rate quota inspector |
 | **12** | `cache_shield` | Zero-lock atomic memory cache (ETag / 304) | `~20 ns` | Lock-free concurrent atomic cache |
+| **13** | `threat_harvester` | Autonomous Zero-Day & CVE Campaign Correlator | `~25 ns` | Mathematical multi-subnet sliding window |
 
 ---
 

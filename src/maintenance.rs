@@ -16,6 +16,10 @@ pub struct MaintenanceReport {
     pub decayed_pow_records_pruned: usize,
     pub active_quarantined_subnets: usize,
     pub active_pow_records: usize,
+    #[serde(default)]
+    pub threat_candidates_pruned: usize,
+    #[serde(default)]
+    pub active_threat_candidates: usize,
     pub timestamp_ms: u64,
 }
 
@@ -24,6 +28,7 @@ pub struct MaintenanceReport {
 pub struct MaintenanceManager {
     quarantine: AutonomousQuarantine,
     adaptive_pow: AdaptivePowEngine,
+    threat_harvester: Option<crate::threat_harvester::ThreatHarvesterEngine>,
 }
 
 impl MaintenanceManager {
@@ -31,19 +36,38 @@ impl MaintenanceManager {
         Self {
             quarantine,
             adaptive_pow,
+            threat_harvester: None,
         }
+    }
+
+    /// Attach a ThreatHarvesterEngine to coordinate candidate pruning
+    pub fn with_threat_harvester(
+        mut self,
+        harvester: crate::threat_harvester::ThreatHarvesterEngine,
+    ) -> Self {
+        self.threat_harvester = Some(harvester);
+        self
     }
 
     /// Execute a synchronous hygiene pass across all tracked defense stores
     pub fn run_maintenance(&self, now_ms: u64) -> MaintenanceReport {
         let quarantined_subnets_pruned = self.quarantine.purge_expired(now_ms);
         let decayed_pow_records_pruned = self.adaptive_pow.prune_decayed(now_ms);
+        let (threat_candidates_pruned, active_threat_candidates) =
+            if let Some(ref harvester) = self.threat_harvester {
+                let pruned = harvester.prune_expired(now_ms);
+                (pruned, harvester.candidate_count())
+            } else {
+                (0, 0)
+            };
 
         MaintenanceReport {
             quarantined_subnets_pruned,
             decayed_pow_records_pruned,
             active_quarantined_subnets: self.quarantine.active_bans_count(),
             active_pow_records: self.adaptive_pow.tracked_ips_count(),
+            threat_candidates_pruned,
+            active_threat_candidates,
             timestamp_ms: now_ms,
         }
     }
@@ -60,14 +84,19 @@ impl MaintenanceManager {
                     .map(|d| d.as_millis() as u64)
                     .unwrap_or(0);
                 let report = mgr.run_maintenance(now_ms);
-                if report.quarantined_subnets_pruned > 0 || report.decayed_pow_records_pruned > 0 {
+                if report.quarantined_subnets_pruned > 0
+                    || report.decayed_pow_records_pruned > 0
+                    || report.threat_candidates_pruned > 0
+                {
                     #[cfg(feature = "abuse-reporting")]
                     tracing::info!(
-                        "🧹 [PHYLAX MAINTENANCE] Pruned {} expired subnet bans, {} decayed PoW records. Active: {} subnets, {} PoW records",
+                        "🧹 [PHYLAX MAINTENANCE] Pruned {} expired subnet bans, {} decayed PoW records, {} threat candidates. Active: {} subnets, {} PoW records, {} candidates",
                         report.quarantined_subnets_pruned,
                         report.decayed_pow_records_pruned,
+                        report.threat_candidates_pruned,
                         report.active_quarantined_subnets,
-                        report.active_pow_records
+                        report.active_pow_records,
+                        report.active_threat_candidates
                     );
                 }
             }

@@ -1,8 +1,10 @@
 //! # Autonomous Decoy URI Honeyroutes & Reconnaissance Traps
 //! One-Job: Deterministically identify and categorize automated scanners probing known decoy endpoints.
 
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Category of decoy endpoint tripped by the scanner
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -69,8 +71,8 @@ impl Default for DecoyUriConfig {
 #[derive(Debug, Clone)]
 pub struct DecoyUriSentinel {
     enabled: bool,
-    exact_traps: HashSet<String>,
-    prefix_traps: Vec<(String, DecoyCategory)>,
+    exact_traps: Arc<RwLock<HashMap<String, DecoyCategory>>>,
+    prefix_traps: Arc<RwLock<Vec<(String, DecoyCategory)>>>,
 }
 
 impl Default for DecoyUriSentinel {
@@ -82,7 +84,7 @@ impl Default for DecoyUriSentinel {
 impl DecoyUriSentinel {
     /// Construct a new sentinel loaded with the curated production catalog
     pub fn new(config: DecoyUriConfig) -> Self {
-        let mut exact_traps = HashSet::new();
+        let mut exact_traps = HashMap::new();
         let mut prefix_traps = Vec::new();
 
         // 1. Curated Exact Traps: Environment, Secrets & Cloud Probes
@@ -133,8 +135,8 @@ impl DecoyUriSentinel {
             ("/dump.sql", DecoyCategory::DatabaseBackup),
         ];
 
-        for (path, _) in &standard_exact {
-            exact_traps.insert(path.to_ascii_lowercase());
+        for (path, category) in &standard_exact {
+            exact_traps.insert(path.to_ascii_lowercase(), *category);
         }
 
         // 2. Curated Prefix Traps
@@ -156,8 +158,8 @@ impl DecoyUriSentinel {
         }
 
         // 3. User-defined Custom Traps
-        for (exact, _) in &config.custom_exact_routes {
-            exact_traps.insert(exact.to_ascii_lowercase());
+        for (exact, category) in &config.custom_exact_routes {
+            exact_traps.insert(exact.to_ascii_lowercase(), *category);
         }
         for (prefix, category) in config.custom_prefix_routes {
             prefix_traps.push((prefix.to_ascii_lowercase(), category));
@@ -165,9 +167,40 @@ impl DecoyUriSentinel {
 
         Self {
             enabled: config.enabled,
-            exact_traps,
-            prefix_traps,
+            exact_traps: Arc::new(RwLock::new(exact_traps)),
+            prefix_traps: Arc::new(RwLock::new(prefix_traps)),
         }
+    }
+
+    /// Dynamically registers a newly discovered honeypot / zero-day trap in real-time
+    pub fn add_exact_trap(&self, path: &str) {
+        let normalized = Self::normalize_path(path);
+        let category = self.categorize_path(&normalized);
+        self.exact_traps.write().insert(normalized, category);
+    }
+
+    /// Dynamically registers an exact trap with an explicit threat category
+    pub fn add_exact_trap_with_category(&self, path: &str, category: DecoyCategory) {
+        let normalized = Self::normalize_path(path);
+        self.exact_traps.write().insert(normalized, category);
+    }
+
+    /// Dynamically registers a newly discovered prefix trap
+    pub fn add_prefix_trap(&self, prefix: &str, category: DecoyCategory) {
+        let normalized = Self::normalize_path(prefix);
+        self.prefix_traps.write().push((normalized, category));
+    }
+
+    /// Checks if a normalized path is currently registered as a trap
+    pub fn contains_trap(&self, raw_path: &str) -> bool {
+        let normalized = Self::normalize_path(raw_path);
+        self.exact_traps.read().contains_key(&normalized)
+            || self.prefix_traps.read().iter().any(|(p, _)| normalized.starts_with(p))
+    }
+
+    /// Total count of registered active traps
+    pub fn total_traps(&self) -> usize {
+        self.exact_traps.read().len() + self.prefix_traps.read().len()
     }
 
     /// Normalizes a URI path (removes query/fragment, collapses multiple slashes, converts to lowercase)
@@ -227,20 +260,25 @@ impl DecoyUriSentinel {
         if !needs_normalization {
             let path = raw_path.trim();
 
-            if self.exact_traps.contains(path) {
-                let category = self.categorize_path(path);
-                return DecoyUriVerdict::Trapped {
-                    matched_path: path.to_string(),
-                    category,
-                };
-            }
-
-            for (prefix, category) in &self.prefix_traps {
-                if path.starts_with(prefix) {
+            {
+                let exact = self.exact_traps.read();
+                if let Some(category) = exact.get(path) {
                     return DecoyUriVerdict::Trapped {
                         matched_path: path.to_string(),
                         category: *category,
                     };
+                }
+            }
+
+            {
+                let prefix = self.prefix_traps.read();
+                for (p, category) in prefix.iter() {
+                    if path.starts_with(p) {
+                        return DecoyUriVerdict::Trapped {
+                            matched_path: path.to_string(),
+                            category: *category,
+                        };
+                    }
                 }
             }
 
@@ -272,22 +310,27 @@ impl DecoyUriSentinel {
 
         let normalized = Self::normalize_path(raw_path);
 
-        // 1. Exact Match Check (O(1) HashSet lookup, ~5-10ns)
-        if self.exact_traps.contains(&normalized) {
-            let category = self.categorize_path(&normalized);
-            return DecoyUriVerdict::Trapped {
-                matched_path: normalized,
-                category,
-            };
-        }
-
-        // 2. Prefix Match Check
-        for (prefix, category) in &self.prefix_traps {
-            if normalized.starts_with(prefix) {
+        // 1. Exact Match Check (O(1) HashMap lookup, ~5-10ns)
+        {
+            let exact = self.exact_traps.read();
+            if let Some(category) = exact.get(&normalized) {
                 return DecoyUriVerdict::Trapped {
                     matched_path: normalized,
                     category: *category,
                 };
+            }
+        }
+
+        // 2. Prefix Match Check
+        {
+            let prefix = self.prefix_traps.read();
+            for (p, category) in prefix.iter() {
+                if normalized.starts_with(p) {
+                    return DecoyUriVerdict::Trapped {
+                        matched_path: normalized,
+                        category: *category,
+                    };
+                }
             }
         }
 
@@ -319,16 +362,35 @@ impl DecoyUriSentinel {
     }
 
     /// Helper to assign appropriate category to exact matches
-    fn categorize_path(&self, path: &str) -> DecoyCategory {
-        if path.contains("env") || path.contains("pip.conf") || path.contains("credentials") || path.contains("auth.json") || path.contains("secrets") || path.contains("config") {
+    pub fn categorize_path(&self, path: &str) -> DecoyCategory {
+        let lower = path.to_ascii_lowercase();
+        if lower.contains("env")
+            || lower.contains("pip.conf")
+            || lower.contains("credentials")
+            || lower.contains("auth.json")
+            || lower.contains("secrets")
+            || lower.contains("config")
+        {
             DecoyCategory::EnvironmentSecret
-        } else if path.contains("terraform") || path.contains("aws") || path.contains("k8s") || path.contains("firebase") {
+        } else if lower.contains("terraform")
+            || lower.contains("aws")
+            || lower.contains("k8s")
+            || lower.contains("firebase")
+        {
             DecoyCategory::CloudInfrastructure
-        } else if path.contains("wp-") || path.contains("xmlrpc") || path.contains("phpmyadmin") || path.contains("settings.php") {
+        } else if lower.contains("wp-")
+            || lower.contains("xmlrpc")
+            || lower.contains("phpmyadmin")
+            || lower.contains("settings.php")
+            || lower.contains("admin")
+            || lower.contains("login")
+            || lower.contains("console")
+            || lower.ends_with(".php")
+        {
             DecoyCategory::AdminCmsProbe
-        } else if path.contains("key") || path.contains("id_rsa") {
+        } else if lower.contains("key") || lower.contains("id_rsa") {
             DecoyCategory::PrivateKey
-        } else if path.contains(".zip") || path.contains(".tar") || path.contains(".sql") {
+        } else if lower.contains(".zip") || lower.contains(".tar") || lower.contains(".sql") {
             DecoyCategory::DatabaseBackup
         } else {
             DecoyCategory::Custom

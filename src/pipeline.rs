@@ -121,6 +121,7 @@ pub struct ShieldPipeline {
     adaptive_pow: AdaptivePowEngine,
     quarantine: AutonomousQuarantine,
     decoy_uri: DecoyUriSentinel,
+    threat_harvester: crate::threat_harvester::ThreatHarvesterEngine,
     enable_pow: bool,
     enable_timing: bool,
     enable_subnet: bool,
@@ -137,6 +138,32 @@ impl ShieldPipeline {
     /// Access the Decoy URI Sentinel
     pub fn decoy_uri(&self) -> &DecoyUriSentinel {
         &self.decoy_uri
+    }
+
+    /// Access the Threat Harvester Engine (Layer 13)
+    pub fn threat_harvester(&self) -> &crate::threat_harvester::ThreatHarvesterEngine {
+        &self.threat_harvester
+    }
+
+    /// Record an anomalous or unmapped URI probe into the multi-subnet threat harvester.
+    /// Autonomously promotes confirmed zero-day threats into the DecoyUriSentinel.
+    pub fn record_anomalous_uri(
+        &self,
+        raw_path: &str,
+        client_ip: std::net::IpAddr,
+        now_ms: u64,
+    ) -> Option<crate::threat_harvester::PromotionVerdict> {
+        self.threat_harvester.ingest_anomalous_uri(raw_path, client_ip, now_ms)
+    }
+
+    /// Convenience wrapper to record anomalous URI using string IP representation
+    pub fn record_anomalous_uri_str(
+        &self,
+        raw_path: &str,
+        client_ip_str: &str,
+        now_ms: u64,
+    ) -> Option<crate::threat_harvester::PromotionVerdict> {
+        self.threat_harvester.ingest_anomalous_uri_str(raw_path, client_ip_str, now_ms)
     }
 
     /// Access the Tarpit Governor
@@ -160,6 +187,7 @@ impl ShieldPipeline {
             self.quarantine.clone(),
             self.adaptive_pow.clone(),
         )
+        .with_threat_harvester(self.threat_harvester.clone())
     }
 
     /// Execute a maintenance pass directly across this pipeline's defense engines
@@ -435,6 +463,7 @@ pub struct ShieldPipelineBuilder {
     adaptive_pow_config: AdaptivePowConfig,
     quarantine_config: QuarantineConfig,
     decoy_uri_config: DecoyUriConfig,
+    threat_harvester_config: crate::threat_harvester::ThreatHarvesterConfig,
     #[cfg(feature = "abuse-reporting")]
     informant: Option<Arc<crate::abuse_reporting::InformantEngine>>,
 }
@@ -456,6 +485,7 @@ impl Default for ShieldPipelineBuilder {
             adaptive_pow_config: AdaptivePowConfig::default(),
             quarantine_config: QuarantineConfig::default(),
             decoy_uri_config: DecoyUriConfig::default(),
+            threat_harvester_config: crate::threat_harvester::ThreatHarvesterConfig::default(),
             #[cfg(feature = "abuse-reporting")]
             informant: None,
         }
@@ -558,6 +588,14 @@ impl ShieldPipelineBuilder {
         self
     }
 
+    pub fn with_threat_harvester(
+        mut self,
+        config: crate::threat_harvester::ThreatHarvesterConfig,
+    ) -> Self {
+        self.threat_harvester_config = config;
+        self
+    }
+
     pub fn build(self) -> ShieldPipeline {
         let honeypot = match self.decoy_fields {
             Some(fields) => HoneypotValidator::new(fields),
@@ -576,6 +614,10 @@ impl ShieldPipelineBuilder {
         let adaptive_pow = AdaptivePowEngine::new(self.adaptive_pow_config);
         let quarantine = AutonomousQuarantine::new(self.quarantine_config);
         let decoy_uri = DecoyUriSentinel::new(self.decoy_uri_config);
+        let threat_harvester = crate::threat_harvester::ThreatHarvesterEngine::new(
+            self.threat_harvester_config,
+            decoy_uri.clone(),
+        );
 
         ShieldPipeline {
             honeypot,
@@ -587,6 +629,7 @@ impl ShieldPipelineBuilder {
             adaptive_pow,
             quarantine,
             decoy_uri,
+            threat_harvester,
             enable_pow: self.enable_pow,
             enable_timing: self.enable_timing,
             enable_subnet: self.enable_subnet,

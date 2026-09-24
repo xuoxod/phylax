@@ -14,6 +14,7 @@
 //! 10. Binary Download Voucher & Byte-Range Abuse Guard (`dist_guard`)
 //! 11. L7 Stream & Slowloris Protection Guard (`stream_guard`)
 //! 12. Zero-Lock In-Memory Cache Shield (`cache_shield`)
+//! 13. Autonomous Zero-Day & Emerging Threat Harvester (`threat_harvester`)
 
 pub mod adaptive_pow;
 pub mod autonomous_quarantine;
@@ -30,6 +31,7 @@ pub mod session_sentinel;
 pub mod stream_guard;
 pub mod subnet_guard;
 pub mod tarpit;
+pub mod threat_harvester;
 pub mod threat_intel;
 pub mod timing;
 pub mod toll_guard;
@@ -62,6 +64,9 @@ pub use tarpit::{TarpitConfig, TarpitGovernor, TarpitSlotGuard, TarpitVerdict};
 pub use timing::{TimingGuard, TimingVerdict};
 pub use toll_guard::{TollGuard, TollGuardConfig, TollVerdict};
 pub use turn_guard::{TurnCredentials, TurnGuard, TurnGuardConfig, TurnVerdict};
+pub use threat_harvester::{
+    CandidatePathRecord, PromotionVerdict, SubnetKey, ThreatHarvesterConfig, ThreatHarvesterEngine,
+};
 
 #[cfg(feature = "abuse-reporting")]
 pub use abuse_reporting::{
@@ -87,6 +92,7 @@ pub mod prelude {
     pub use crate::session_sentinel::{GeoCoordinate, SessionSentinel};
     pub use crate::stream_guard::{RouteCategory, StreamGuard};
     pub use crate::subnet_guard::SubnetGuard;
+    pub use crate::threat_harvester::{ThreatHarvesterConfig, ThreatHarvesterEngine};
     pub use crate::timing::TimingGuard;
     pub use crate::toll_guard::TollGuard;
     pub use crate::turn_guard::TurnGuard;

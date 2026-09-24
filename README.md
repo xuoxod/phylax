@@ -59,7 +59,9 @@
 flowchart TD
     REQ["Incoming HTTP / API Request"] --> L0["0. Autonomous Quarantine (Subnet CIDR) ~10ns"]
     L0 -- Quarantined --> REJ["403 Forbidden / Tarpit"]
-    L0 -- Pass --> L1["1. Honeypot Trap (HoneypotValidator) ~5ns"]
+    L0 -- Pass --> L05["0.5 Decoy URI Honeyroutes (DecoyUriSentinel) ~5-10ns"]
+    L05 -- Trapped --> GHOST["Stealth 404 / Forensic Dossier"]
+    L05 -- Pass --> L1["1. Honeypot Trap (HoneypotValidator) ~5ns"]
     L1 -- Trapped --> TARPIT["Asymmetric Tarpit (Reverse Slowloris)"]
     L1 -- Pass --> L2["2. Perimeter Defense (SubnetGuard Radix CIDR) ~15ns"]
     L2 -- Blocked --> REJ
@@ -83,6 +85,8 @@ flowchart TD
     L11 -- Trickle Flood --> REJ
     L11 -- Pass --> L12["12. Zero-Lock Atomic Memory Cache (CacheShield) ~20ns"]
     L12 -- Pass / 304 Revalidated --> HANDLER["Application Core Handler"]
+    HANDLER -- Unmapped 404 --> L13["13. Autonomous Threat Harvester (ThreatHarvesterEngine) ~25ns"]
+    L13 -- Multi-Subnet Correlated (≥3 Subnets) --> ELEVATE["Elevate to Live Decoy Traps in <15ns!"]
 ```
 
 ---
@@ -354,19 +358,33 @@ Dynamic SHA-256 micro-puzzles scale quadratic CPU friction on suspicious IP rang
   Next Tier:      22 bits (~4,194,304 hashes, ~15s CPU lockup)
 ```
 
-### 4. Zero-Leak Autonomous In-Memory Maintenance
+### 4. Autonomous Zero-Day Discovery & Decoy Trap Promotion (Layer 13)
+When a coordinated botnet probes an unmapped zero-day vulnerability across distributed residential proxies:
+
+```text
+[PHYLAX HARVESTER] Correlating anomalous reconnaissance probe: '/wp-content/plugins/cve-2026-zero-day/shell.php'
+  Subnet 1:       185.220.101.0/24 (Hit 1 at t=0ms - Tor Exit)
+  Subnet 2:       194.26.29.0/24   (Hit 2 at t+140ms - Bulletproof ISP)
+  Subnet 3:       45.154.255.0/24  (Hit 3 at t+280ms -> 3-Subnet Correlation Threshold Reached!)
+  Action:         Autonomously Promoted to Live Decoy Trap Trie (DecoyCategory::AdminCmsProbe)
+  Subsequent:     All future probes across all IPs intercepted at Layer 0.5 in <15ns with Stealth 404!
+```
+
+### 5. Zero-Leak Autonomous In-Memory Maintenance
 Continuous, lock-free state pruning guarantees zero memory leakage:
 
 ```text
 [PHYLAX MAINTENANCE] Running automated in-memory hygiene cycle (t = 1789642800000 ms)
   Quarantined Subnets Pruned: 4 expired (/24 CIDRs)
   Decayed PoW Records Pruned: 18 records (decayed to baseline difficulty)
+  Threat Candidates Pruned:   7 expired unpromoted candidate paths
   Active Quarantined Subnets: 2 subnets
   Active Tracked PoW IPs:     5 IPs
+  Active Threat Candidates:   1 candidate
   Hygiene Latency:            < 15 microseconds (Zero request locks)
 ```
 
-### 5. Optional Collaborative Threat Intelligence (AbuseIPDB v2)
+### 6. Optional Collaborative Threat Intelligence (AbuseIPDB v2)
 When `abuse-reporting` is enabled, honeypot intrusions are asynchronously dispatched to global intelligence feeds with a 15-minute per-IP deduplication governor:
 
 ```text
