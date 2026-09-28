@@ -100,6 +100,24 @@ fi
 chmod +x "${BIN_DIR}/phylax"
 echo -e "${GREEN}✅ Installed binary to: ${BOLD}${BIN_DIR}/phylax${NC}"
 
+# Install Analytics & Observability Suite if present in repository
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+if [ -d "${REPO_ROOT}/tools/analytics" ]; then
+    echo -e "🛠️  Installing Sovereign Analytics & Observability Suite..."
+    if [ -f "${REPO_ROOT}/tools/analytics/phylax-analyze-traffic.sh" ]; then
+        cp -f "${REPO_ROOT}/tools/analytics/phylax-analyze-traffic.sh" "${BIN_DIR}/phylax-analyze-traffic"
+        chmod +x "${BIN_DIR}/phylax-analyze-traffic"
+        echo -e "${GREEN}   Installed:${NC} ${BIN_DIR}/phylax-analyze-traffic"
+    fi
+    if [ -f "${REPO_ROOT}/tools/analytics/phylax-threat-recon.sh" ]; then
+        cp -f "${REPO_ROOT}/tools/analytics/phylax-threat-recon.sh" "${BIN_DIR}/phylax-threat-recon"
+        chmod +x "${BIN_DIR}/phylax-threat-recon"
+        echo -e "${GREEN}   Installed:${NC} ${BIN_DIR}/phylax-threat-recon"
+    fi
+fi
+
 # Generate default configuration if not present
 CONFIG_FILE="${CONFIG_DIR}/phylax.toml"
 if [ ! -f "${CONFIG_FILE}" ]; then

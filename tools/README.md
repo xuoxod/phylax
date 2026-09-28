@@ -17,9 +17,15 @@ The Phylax Analytics Suite operates in two seamless operational modes:
 
 ## 🚀 Quickstart & Usage
 
-### 1. POSIX Shell (`phylax-analyze-traffic.sh`)
+### 1. Ingress Traffic & Market Demand Analyzer (`phylax-analyze-traffic`)
+
+* **POSIX:** `./tools/analytics/phylax-analyze-traffic.sh`
+* **PowerShell:** `.\tools\analytics\phylax-analyze-traffic.ps1`
 
 ```bash
+# Auto-discover local logs (in project root or on systemd server)
+./tools/analytics/phylax-analyze-traffic.sh
+
 # Ingest live piped stream (e.g. journalctl or log tail)
 journalctl -u rmediatech -n 200 --no-pager | phylax-analyze-traffic.sh
 
@@ -30,14 +36,23 @@ journalctl -u rmediatech -n 200 --no-pager | phylax-analyze-traffic.sh
 cat /var/log/access.log | phylax-analyze-traffic.sh --json | jq .
 ```
 
-### 2. Windows / PowerShell Core (`phylax-analyze-traffic.ps1`)
+### 2. Threat Actor Reconnaissance & Abuse Reporting (`phylax-threat-recon`)
 
-```powershell
-# Analyze log file
-.\tools\analytics\phylax-analyze-traffic.ps1 -InputPath C:\logs\access.log
+* **POSIX:** `./tools/analytics/phylax-threat-recon.sh`
+* **PowerShell:** `.\tools\analytics\phylax-threat-recon.ps1`
 
-# Pipe stream & output JSON
-Get-Content C:\logs\access.log | .\tools\analytics\phylax-analyze-traffic.ps1 -Json
+```bash
+# Auto-discover recent hostile 4xx/404 offenders on the host
+./tools/analytics/phylax-threat-recon.sh
+
+# Inspect specific IP entities with Geo, ASN, and AbuseIPDB scores
+./tools/analytics/phylax-threat-recon.sh 45.138.12.14 169.40.142.74
+
+# Autonomously dispatch formal incident dossiers to AbuseIPDB
+./tools/analytics/phylax-threat-recon.sh -n 5 --report
+
+# Emit structured JSON
+./tools/analytics/phylax-threat-recon.sh -n 5 --json
 ```
 
 ---
