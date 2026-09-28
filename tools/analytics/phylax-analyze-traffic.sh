@@ -90,8 +90,21 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 if [ -z "$INPUT_FILE" ]; then
-    if [ -t 0 ]; then
-        # No stdin pipe: try local project discovery
+    if [ ! -t 0 ]; then
+        if command -v timeout >/dev/null 2>&1; then
+            first_line=$(timeout 0.1 head -n 1 2>/dev/null || true)
+            if [ -n "$first_line" ]; then
+                TMP_STREAM=$(mktemp)
+                printf '%s\n' "$first_line" > "$TMP_STREAM"
+                cat >> "$TMP_STREAM"
+                INPUT_FILE="$TMP_STREAM"
+                AUTO_DISCOVERED_DESC="Standard Input (Piped Stream)"
+            fi
+        fi
+    fi
+
+    # Royalty Context Auto-Discovery Mode (when stdin is empty or interactive)
+    if [ -z "$INPUT_FILE" ]; then
         if [ -f "logs/app.out.log" ]; then
             INPUT_FILE="logs/app.out.log"
             AUTO_DISCOVERED_DESC="Matrix-RS Native Log (logs/app.out.log)"
@@ -112,16 +125,31 @@ if [ -z "$INPUT_FILE" ]; then
             AUTO_DISCOVERED_DESC="Propylea Edge Gateway Log"
         fi
 
+        # Fallback to host journalctl or syslog if running on a live server node
+        if [ -z "$INPUT_FILE" ] && command -v journalctl >/dev/null 2>&1; then
+            TMP_STREAM=$(mktemp)
+            if journalctl _UID=$(id -u) -n 2000 --no-pager > "$TMP_STREAM" 2>/dev/null && [ -s "$TMP_STREAM" ]; then
+                INPUT_FILE="$TMP_STREAM"
+                AUTO_DISCOVERED_DESC="Host Ingress Journal (User UID $(id -u), Last 2000 events)"
+            elif journalctl -n 2000 --no-pager > "$TMP_STREAM" 2>/dev/null && [ -s "$TMP_STREAM" ]; then
+                INPUT_FILE="$TMP_STREAM"
+                AUTO_DISCOVERED_DESC="Host System Journal (Last 2000 events)"
+            else
+                rm -f "$TMP_STREAM"
+                TMP_STREAM=""
+            fi
+        fi
+
+        if [ -z "$INPUT_FILE" ] && [ -r "/var/log/syslog" ]; then
+            INPUT_FILE="/var/log/syslog"
+            AUTO_DISCOVERED_DESC="System Log (/var/log/syslog)"
+        fi
+
         if [ -z "$INPUT_FILE" ]; then
             echo "Error: No log file specified and no native project log auto-discovered." >&2
             echo "Usage: $SCRIPT_NAME [OPTIONS] [LOG_FILE] or pipe via stdin." >&2
             exit 1
         fi
-    else
-        # Piped via stdin
-        TMP_STREAM=$(mktemp)
-        cat > "$TMP_STREAM"
-        INPUT_FILE="$TMP_STREAM"
     fi
 else
     AUTO_DISCOVERED_DESC="Specified File: $INPUT_FILE"
