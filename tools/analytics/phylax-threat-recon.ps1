@@ -1,11 +1,11 @@
 # ==============================================================================
-# 🛡️ PHYLAX THREAT RECONNAISSANCE & ABUSE INTELLIGENCE: phylax-threat-recon.ps1
+# [Phylax] PHYLAX THREAT RECONNAISSANCE & ABUSE INTELLIGENCE: phylax-threat-recon.ps1
 # Standard: AGY-RULE-SOVEREIGN-FLAGSHIP-01 & Directive 7 (GEMINI.md)
 # Cross-Platform Parity: Pure PowerShell Core (Windows / macOS / Linux)
 # ==============================================================================
 [CmdletBinding()]
 param(
-    [Parameter(ValueFromPipeline = $true, ValueFromRemainingArguments = $true)]
+    [Parameter(Position = 0, ValueFromPipeline = $true, ValueFromRemainingArguments = $true)]
     [string[]]$IpAddresses,
 
     [Parameter()]
@@ -49,7 +49,7 @@ $targets = @()
 if ($IpAddresses -and $IpAddresses.Count -gt 0) {
     $targets = $IpAddresses
 } else {
-    Write-Host "ℹ️ Please specify IP addresses or pipe log lines to investigate."
+    Write-Host "[INFO] Please specify IP addresses or pipe log lines to investigate."
     exit 0
 }
 
@@ -93,10 +93,10 @@ foreach ($ip in ($targets | Select-Object -Unique -First $Limit)) {
             $postHeaders = @{ "Key" = $apiKey; "Accept" = "application/json" }
             $resp = Invoke-RestMethod -Uri "https://api.abuseipdb.com/api/v2/report" -Method Post -Headers $postHeaders -Body $body -TimeoutSec 4 -ErrorAction SilentlyContinue
             if ($resp -and $resp.data) {
-                $action = "🚨 Reported"
+                $action = "[REPORTED]"
             }
         } catch {
-            $action = "⚠️ Report Failed"
+            $action = "[REPORT FAILED]"
         }
     }
 
@@ -116,16 +116,16 @@ foreach ($ip in ($targets | Select-Object -Unique -First $Limit)) {
 if ($Json) {
     $results | ConvertTo-Json -Depth 3
 } else {
-    Write-Host @"
-### 🛡️ Phylax Threat Intelligence & Entity Reconnaissance
-* **Target Entities Investigated:** $($results.Count)
-* **AbuseIPDB Integration:** $(if ($apiKey) { "🟢 Active" } else { "⚪ Passive" })
-* **Auto-Reporting Mode:** $(if ($Report) { "🚨 Enabled" } else { "🔒 Monitoring Only" })
-
-| Attacker IP | Organization / ISP | ASN | Location | Abuse Score | Action Taken |
-| :--- | :--- | :---: | :---: | :---: | :---: |
-"@
+    $abuseStatus = if ($apiKey) { "[ACTIVE]" } else { "[PASSIVE]" }
+    $reportStatus = if ($Report) { "[ENABLED]" } else { "[MONITORING ONLY]" }
+    Write-Host "### [Phylax] Threat Intelligence & Entity Reconnaissance"
+    Write-Host ("* **Target Entities Investigated:** {0}" -f $results.Count)
+    Write-Host ("* **AbuseIPDB Integration:** {0}" -f $abuseStatus)
+    Write-Host ("* **Auto-Reporting Mode:** {0}" -f $reportStatus)
+    Write-Host ""
+    Write-Host "| Attacker IP | Organization / ISP | ASN | Location | Abuse Score | Action Taken |"
+    Write-Host "| :--- | :--- | :---: | :---: | :---: | :---: |"
     foreach ($r in $results) {
-        Write-Host "| **`$($r.IpAddress)`** | $($r.ISP) | `$($r.ASN)` | $($r.Location) | $($r.AbuseConfidenceScore)% | $($r.Action) |"
+        Write-Host ("| **``{0}``** | {1} | ``{2}`` | {3} | {4}% | {5} |" -f $r.IpAddress, $r.ISP, $r.ASN, $r.Location, $r.AbuseConfidenceScore, $r.Action)
     }
 }

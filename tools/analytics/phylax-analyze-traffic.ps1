@@ -1,5 +1,5 @@
 # ==============================================================================
-# 🛡️ PHYLAX SOVEREIGN ANALYTICS ENGINE: phylax-analyze-traffic.ps1
+# [Phylax] PHYLAX SOVEREIGN ANALYTICS ENGINE: phylax-analyze-traffic.ps1
 # Standard: AGY-RULE-SOVEREIGN-FLAGSHIP-01 & Directive 7 (GEMINI.md)
 # Architecture: Native PowerShell Core (Windows & Cross-Platform).
 # Royalty Mode: Automatically discovers local project logs if none provided.
@@ -194,14 +194,14 @@ if ($Json) {
 
     $Result | ConvertTo-Json -Depth 4
 } else {
-    Write-Output "### 📊 Sovereign Intelligence & Traffic Audit Report (PowerShell)"
+    Write-Output "### [Phylax] Sovereign Intelligence & Traffic Audit Report (PowerShell)"
     Write-Output ""
-    Write-Output "* **Ingress Stream:** ``$SourceDesc``"
-    Write-Output "* **Total Requests Inspected:** ``$TotalRequests``"
-    Write-Output "* **Unique IP Endpoints:** ``$UniqueIPCount``"
+    Write-Output ("* **Ingress Stream:** ``{0}``" -f $SourceDesc)
+    Write-Output ("* **Total Requests Inspected:** ``{0}``" -f $TotalRequests)
+    Write-Output ("* **Unique IP Endpoints:** ``{0}``" -f $UniqueIPCount)
     if ($AvgLatencyUs -gt 0) {
         $ms = [math]::Round($AvgLatencyUs / 1000.0, 2)
-        Write-Output "* **Average Upstream Latency:** ``$AvgLatencyUs µs`` ($ms ms)"
+        Write-Output ("* **Average Upstream Latency:** ``{0} us`` ({1} ms)" -f $AvgLatencyUs, $ms)
     }
     Write-Output ""
     Write-Output "#### 1. Ingress Status & Deflection Breakdown"
@@ -214,14 +214,14 @@ if ($Json) {
     $p4 = if ($TotalRequests -gt 0) { [math]::Round(($Count4xx * 100.0 / $TotalRequests), 1) } else { 0 }
     $p5 = if ($TotalRequests -gt 0) { [math]::Round(($Count5xx * 100.0 / $TotalRequests), 1) } else { 0 }
 
-    Write-Output "| **``2xx Success``** | $Count2xx | $p2% | Nominal traffic / static assets |"
-    Write-Output "| **``3xx Redirect``** | $Count3xx | $p3% | Canonical URL & Auth routing |"
-    Write-Output "| **``4xx Warnings``** | $Count4xx | $p4% | Bot deflections & unmapped probes |"
-    Write-Output "| • *404 Not Found* | *$Count404* | - | Threat Harvester candidates / Missing paths |"
-    Write-Output "| • *403 Bot Trapped* | *$Count403Bot* | - | Headless scrapers deflecting at edge |"
-    Write-Output "| • *405 Method Block* | *$Count405Method* | - | Root POST/PUT injection deflections |"
-    Write-Output "| • *429 Throttled* | *$Count429Rate* | - | Token-bucket sliding limit active |"
-    Write-Output "| **``5xx Server Error``** | $Count5xx | $p5% | Server faults (**Zero-defect goal**) |"
+    Write-Output ("| **``2xx Success``** | {0} | {1}% | Nominal traffic / static assets |" -f $Count2xx, $p2)
+    Write-Output ("| **``3xx Redirect``** | {0} | {1}% | Canonical URL & Auth routing |" -f $Count3xx, $p3)
+    Write-Output ("| **``4xx Warnings``** | {0} | {1}% | Bot deflections & unmapped probes |" -f $Count4xx, $p4)
+    Write-Output ("| - *404 Not Found* | *{0}* | - | Threat Harvester candidates / Missing paths |" -f $Count404)
+    Write-Output ("| - *403 Bot Trapped* | *{0}* | - | Headless scrapers deflecting at edge |" -f $Count403Bot)
+    Write-Output ("| - *405 Method Block* | *{0}* | - | Root POST/PUT injection deflections |" -f $Count405Method)
+    Write-Output ("| - *429 Throttled* | *{0}* | - | Token-bucket sliding limit active |" -f $Count429Rate)
+    Write-Output ("| **``5xx Server Error``** | {0} | {1}% | Server faults (**Zero-defect goal**) |" -f $Count5xx, $p5)
 
     if ($Paths404.Count -gt 0) {
         Write-Output ""
@@ -231,14 +231,15 @@ if ($Json) {
         Write-Output "| :--- | :--- | :--- |"
         $Paths404.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First $Top | ForEach-Object {
             $p = $_.Key
+            $val = $_.Value
             $cat = "Unknown Probe"
             if ($p -match "wp-|xmlrpc") { $cat = "WordPress Exploit Scanner" }
             elseif ($p -match "env|config|claude") { $cat = "Credential / Secret Harvester" }
             elseif ($p -match "session|actuator") { $cat = "Spring / Java Actuator Probe" }
             elseif ($p -match "sitemap|robots") { $cat = "SEO Discovery / Crawler" }
-            elseif ($p -match "api|sdk") { $cat = "🔥 **Potential Market Demand / Missing API**" }
+            elseif ($p -match "api|sdk") { $cat = "**Potential Market Demand / Missing API**" }
             elseif ($p -match "login|admin") { $cat = "Admin Interface Reconnaissance" }
-            Write-Output "| ``$p`` | $($_.Value) | $cat |"
+            Write-Output ("| ``{0}`` | {1} | {2} |" -f $p, $val, $cat)
         }
     }
 
@@ -249,7 +250,7 @@ if ($Json) {
         Write-Output "| Subnet / CIDR | Total Ingress Requests |"
         Write-Output "| :--- | :--- |"
         $Subnets.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First $Top | ForEach-Object {
-            Write-Output "| ``$($_.Key)`` | $($_.Value) |"
+            Write-Output ("| ``{0}`` | {1} |" -f $_.Key, $_.Value)
         }
     }
 }
