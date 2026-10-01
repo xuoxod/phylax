@@ -108,7 +108,9 @@ chmod +x "${BIN_DIR}/phylax"
 echo -e "${GREEN}✅ Installed binary to: ${BOLD}${BIN_DIR}/phylax${NC}"
 
 # Install Analytics & Observability Suite
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "")"
+SCRIPT_SOURCE="${BASH_SOURCE[0]-}"
+[ -z "$SCRIPT_SOURCE" ] && SCRIPT_SOURCE="$0"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SOURCE")" 2>/dev/null && pwd || echo "")"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." 2>/dev/null && pwd || echo "")"
 
 if [ -d "${REPO_ROOT}/tools/analytics" ]; then
