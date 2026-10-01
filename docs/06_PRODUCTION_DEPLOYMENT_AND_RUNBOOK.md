@@ -147,6 +147,83 @@ sudo systemctl status phylax.service
 
 ---
 
+### Windows Production Deployment (Windows Service & IOCP)
+
+Phylax runs natively on **Windows Server 2019/2022/2025** and **Windows 10/11**, powered by Windows I/O Completion Ports (IOCP) delivering sub-microsecond edge defense (> 990,000 req/sec/core).
+
+#### 1. Automated Installation via PowerShell
+```powershell
+# Installs phylax.exe, sample phylax.toml, and analytics tools into C:\Program Files\Phylax
+irm https://raw.githubusercontent.com/xuoxod/phylax/main/scripts/install.ps1 | iex
+```
+
+#### 2. Configure Windows Defender Firewall Port
+```powershell
+New-NetFirewallRule -DisplayName "Phylax Edge Proxy" -Direction Inbound -LocalPort 3000 -Protocol TCP -Action Allow
+```
+
+#### 3. Run as an Autonomous Windows Service (NSSM)
+```powershell
+choco install nssm -y
+
+nssm install Phylax "C:\Program Files\Phylax\phylax.exe" "serve --config C:\ProgramData\Phylax\phylax.toml"
+nssm set Phylax AppStdout "C:\ProgramData\Phylax\phylax.log"
+nssm set Phylax AppStderr "C:\ProgramData\Phylax\phylax.err.log"
+nssm set Phylax Start SERVICE_AUTO_START
+
+Start-Service Phylax
+Get-Service Phylax
+```
+
+---
+
+### macOS Production Deployment (Launchd Daemon)
+
+On **macOS** (Apple Silicon M1–M4 & Intel Darwin), Phylax binds directly to Apple's native `kqueue` kernel event subsystem.
+
+#### 1. Native Build & Installation
+```bash
+cargo build --release
+sudo cp target/release/phylax /usr/local/bin/phylax
+sudo mkdir -p /etc/phylax /var/log/phylax
+```
+
+#### 2. Launchd Plist Daemon (`/Library/LaunchDaemons/com.rmediatech.phylax.plist`)
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.rmediatech.phylax</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/phylax</string>
+        <string>serve</string>
+        <string>--config</string>
+        <string>/etc/phylax/phylax.toml</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/var/log/phylax/output.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/phylax/error.log</string>
+</dict>
+</plist>
+```
+
+#### 3. Load & Start Service
+```bash
+sudo chown root:wheel /Library/LaunchDaemons/com.rmediatech.phylax.plist
+sudo launchctl load -w /Library/LaunchDaemons/com.rmediatech.phylax.plist
+sudo launchctl list | grep phylax
+```
+
+---
+
 ## 4. Verification & Testing Runbook
 
 ### Test 1: Verify Stealth Deception Black Hole
