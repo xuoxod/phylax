@@ -6,7 +6,7 @@ use crate::abuse_reporting::cooldown::{CooldownConfig, ReportCooldownGovernor};
 use crate::abuse_reporting::dossier::{DossierFormatter, ForensicDossier};
 use crate::abuse_reporting::error::AbuseReportError;
 use crate::abuse_reporting::sink::{
-    AbuseIpDbSink, GenericWebhookSink, IncidentSink, MultiSink,
+    AbuseIpDbSink, GenericWebhookSink, IncidentSink, MultiSink, SyslogCefSink,
 };
 use crate::abuse_reporting::transport::{AbuseReporterTransport, HttpAbuseReporterTransport};
 use std::sync::Arc;
@@ -24,6 +24,8 @@ pub struct InformantConfig {
     pub webhook_url: Option<String>,
     /// Optional authorization header value for webhook (e.g. "Bearer token" or "ApiKey secret")
     pub webhook_auth: Option<String>,
+    /// Enable local Syslog CEF (Common Event Format) logging for threat incidents
+    pub syslog_cef: bool,
     /// Cooldown & rate limiting configuration
     pub cooldown: CooldownConfig,
 }
@@ -36,6 +38,7 @@ impl Default for InformantConfig {
             api_key: None,
             webhook_url: None,
             webhook_auth: None,
+            syslog_cef: false,
             cooldown: CooldownConfig::default(),
         }
     }
@@ -73,11 +76,15 @@ impl InformantConfig {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty());
 
+        let syslog_cef = std::env::var("PHYLAX_SYSLOG_CEF")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+
         let dry_run = std::env::var("RMT_ABUSE_REPORTING_DRY_RUN")
             .map(|v| v == "true" || v == "1")
             .unwrap_or(false);
 
-        let enabled = (key.is_some() || webhook_url.is_some())
+        let enabled = (key.is_some() || webhook_url.is_some() || syslog_cef)
             && std::env::var("RMT_ABUSE_REPORTING_ENABLED")
                 .map(|v| v != "false" && v != "0")
                 .unwrap_or(true);
@@ -88,6 +95,7 @@ impl InformantConfig {
             api_key: key,
             webhook_url,
             webhook_auth,
+            syslog_cef,
             cooldown: CooldownConfig::default(),
         }
     }
@@ -141,6 +149,10 @@ impl InformantEngine {
         transport: Arc<dyn AbuseReporterTransport>,
     ) -> Arc<dyn IncidentSink> {
         let mut sinks: Vec<Arc<dyn IncidentSink>> = Vec::new();
+
+        if config.syslog_cef {
+            sinks.push(Arc::new(SyslogCefSink));
+        }
 
         if let Some(ref key) = config.api_key {
             if !key.trim().is_empty() {
@@ -305,6 +317,7 @@ mod tests {
             api_key: None,
             webhook_url: None,
             webhook_auth: None,
+            syslog_cef: false,
             cooldown: CooldownConfig::default(),
         };
         let mock = Arc::new(MockAbuseReporterTransport::new());
@@ -333,6 +346,7 @@ mod tests {
             api_key: None,
             webhook_url: None,
             webhook_auth: None,
+            syslog_cef: false,
             cooldown: CooldownConfig::default(),
         };
         let mock_sink = Arc::new(MockIncidentSink::new());
@@ -353,6 +367,36 @@ mod tests {
         assert!(matches!(verdict, InformantVerdict::Reported { .. }));
         assert_eq!(mock_sink.recorded_dossiers().len(), 1);
         assert_eq!(mock_sink.recorded_dossiers()[0].client_ip, "192.0.2.45");
+    }
+
+    #[tokio::test]
+    async fn test_pipeline_syslog_cef_sink_registration() {
+        let config = InformantConfig {
+            enabled: true,
+            dry_run: false,
+            api_key: None,
+            webhook_url: None,
+            webhook_auth: None,
+            syslog_cef: true,
+            cooldown: CooldownConfig::default(),
+        };
+        let mock = Arc::new(MockAbuseReporterTransport::new());
+        let engine = InformantEngine::new(config, mock);
+        assert_eq!(engine.sink().name(), "SyslogCEF");
+
+        let dossier = ForensicDossier {
+            client_ip: "198.51.100.42".to_string(),
+            timestamp_ms: 3000,
+            target_uri: "/.env".to_string(),
+            http_method: "GET".to_string(),
+            category: AbuseCategory::WebHoneypot,
+            trapped_field: None,
+            user_agent: Some("curl/8.0".to_string()),
+            evidence_notes: "recon scan".to_string(),
+        };
+
+        let verdict = engine.process_incident(&dossier).await;
+        assert!(matches!(verdict, InformantVerdict::Reported { .. }));
     }
 
     #[test]

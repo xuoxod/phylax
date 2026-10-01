@@ -127,6 +127,7 @@ async fn test_pipeline_honeypot_triggers_asynchronous_abuse_reporting() {
         api_key: Some("valid_key".to_string()),
         webhook_url: None,
         webhook_auth: None,
+        syslog_cef: false,
         cooldown: CooldownConfig {
             cooldown_window_ms: 60_000,
             max_reports_per_day: 10,

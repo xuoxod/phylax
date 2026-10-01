@@ -4,19 +4,29 @@ All notable changes, defense layer releases, and architectural milestones for **
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.1] - 2026-10-01 (Threat Reconnaissance Hardening & Production Tooling)
+## [0.2.1] - 2026-10-01 (Vendor-Agnostic Threat Intelligence, Dynamic Versioning & Sovereign Packaging)
 
 ### 🌟 Added & Enhanced
-* **Production Build & Deployment Tooling (`Makefile` & `scripts/install.sh`)**:
-  - Added centralized `Makefile` supporting `build`, `release`, `test`, `test-analytics`, and `install` targets.
-  - Enhanced `scripts/install.sh` to install both the core `phylax` CLI engine and the cross-platform analytics suite (`phylax-analyze-traffic`, `phylax-threat-recon`) to `~/.local/bin`.
-* **Host Journalctl Auto-Discovery & Resilient Piping**:
-  - Implemented automatic fallback to host `journalctl -u propylea.service` and system log facilities in `phylax-analyze-traffic` when explicit file paths are omitted.
-  - Added non-blocking FIFO/pipe detection preventing hang states during piped standard input processing.
-* **Autonomous AbuseIPDB Forensics (`phylax-threat-recon`)**:
-  - Integrated real-time IP reputation checks, score caching, and threat vector correlation directly into the analytics toolkit.
-* **Adversarial Test Assertions**:
-  - Verified 51/51 core unit tests, 4/4 POC TDD analytics tests, and 4/4 red-team fuzzer vectors.
+* **Vendor-Agnostic Threat Intelligence & Incident Sinks (Non-Patching BYOK Architecture)**:
+  - Added native Syslog / CEF (Common Event Format) sink (`--syslog-cef`, `syslog_cef = true`) for 100% air-gapped, local SIEM audit logging with zero third-party external HTTP calls.
+  - Enhanced generic webhook sink (`--webhook-url`, `--webhook-auth`) with structured JSON dossiers for direct alerting to Datadog, Splunk, Wazuh, Slack, or Discord.
+  - Retained AbuseIPDB community sink (`--abuseipdb-key`) with built-in token-bucket rate limiting and 24-hour sliding deduplication cooldown.
+  - Unified multi-sink parallel broadcast (`MultiSink`) when multiple destinations are specified.
+* **Dynamic Clap CLI Versioning**:
+  - Replaced static string literals with dynamic `#[command(version)]` binding directly to `Cargo.toml` (`0.2.1`).
+* **Sovereign Release & Cryptographic Packaging Pipeline (`scripts/release.sh`)**:
+  - Implemented automated release packaging adhering to `SOVEREIGN-SIGN-01`.
+  - Generates SHA-256 digests (`.sha256`, `SHA256SUMS`) and detached OpenPGP Ed25519 signatures (`.asc`, `SHA256SUMS.asc`) using the sovereign release key (`4E428019A109578B`).
+* **Clean-Room Distro-Agnostic Installer (`scripts/install.sh` & `scripts/install.ps1`)**:
+  - Dynamic release tag discovery resolving `v*` tag names on GitHub Releases with zero-API-rate-limit redirect inspection.
+  - Automatic download and installation of analytics suite (`phylax-analyze-traffic`, `phylax-threat-recon`) even during curl-piped one-liner executions without git cloning.
+* **Agnostic Threat Reconnaissance Toolkit (`phylax-threat-recon`)**:
+  - Added `--webhook <URL>` support for automated incident reporting to custom endpoints.
+  - Auto-discovers credentials from `.env`, `.bashrc`, and `phylax.toml`.
+  - Scrubbed machine-specific paths; supports standard `/var/log` paths and sovereign project roots.
+* **Adversarial Test Assertions (`POC TDD+++++`)**:
+  - 114/114 core unit, integration, and active defense tests passing in `< 0.15s`.
+  - Verified on Buffalo NAS KVM VM (`citadel-vm1`) clean-room environment.
 
 ---
 

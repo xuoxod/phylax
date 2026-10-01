@@ -68,9 +68,16 @@ else
         esac
 
         if [ -n "${TARGET}" ]; then
-            RELEASE_URL="https://github.com/xuoxod/phylax/releases/latest/download/phylax-${TARGET}.tar.gz"
+            TAG=$(curl -sSLI -o /dev/null -w '%{url_effective}' https://github.com/xuoxod/phylax/releases/latest 2>/dev/null | awk -F'/' '{print $NF}')
+            TAG="${TAG:-v0.2.1}"
+            RELEASE_URL="https://github.com/xuoxod/phylax/releases/download/${TAG}/phylax-${TAG}-${TARGET}.tar.gz"
             TMP_DIR="$(mktemp -d)"
-            if curl -sSLf "${RELEASE_URL}" -o "${TMP_DIR}/phylax.tar.gz" 2>/dev/null; then
+            if ! curl -sSLf "${RELEASE_URL}" -o "${TMP_DIR}/phylax.tar.gz" 2>/dev/null; then
+                RELEASE_URL="https://github.com/xuoxod/phylax/releases/download/${TAG}/phylax-${TARGET}.tar.gz"
+                curl -sSLf "${RELEASE_URL}" -o "${TMP_DIR}/phylax.tar.gz" 2>/dev/null || true
+            fi
+
+            if [ -f "${TMP_DIR}/phylax.tar.gz" ]; then
                 echo -e "📦 Extracting prebuilt binary (${TARGET})..."
                 tar -xzf "${TMP_DIR}/phylax.tar.gz" -C "${TMP_DIR}"
                 if [ -f "${TMP_DIR}/phylax" ]; then
@@ -100,12 +107,12 @@ fi
 chmod +x "${BIN_DIR}/phylax"
 echo -e "${GREEN}✅ Installed binary to: ${BOLD}${BIN_DIR}/phylax${NC}"
 
-# Install Analytics & Observability Suite if present in repository
+# Install Analytics & Observability Suite
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 if [ -d "${REPO_ROOT}/tools/analytics" ]; then
-    echo -e "🛠️  Installing Sovereign Analytics & Observability Suite..."
+    echo -e "🛠️  Installing Sovereign Analytics & Observability Suite from repository..."
     if [ -f "${REPO_ROOT}/tools/analytics/phylax-analyze-traffic.sh" ]; then
         cp -f "${REPO_ROOT}/tools/analytics/phylax-analyze-traffic.sh" "${BIN_DIR}/phylax-analyze-traffic"
         chmod +x "${BIN_DIR}/phylax-analyze-traffic"
@@ -116,6 +123,15 @@ if [ -d "${REPO_ROOT}/tools/analytics" ]; then
         chmod +x "${BIN_DIR}/phylax-threat-recon"
         echo -e "${GREEN}   Installed:${NC} ${BIN_DIR}/phylax-threat-recon"
     fi
+else
+    echo -e "🛠️  Downloading Sovereign Analytics & Observability Suite from GitHub..."
+    RAW_BASE="https://raw.githubusercontent.com/xuoxod/phylax/main/tools/analytics"
+    curl -sSLf "${RAW_BASE}/phylax-analyze-traffic.sh" -o "${BIN_DIR}/phylax-analyze-traffic" 2>/dev/null && \
+        chmod +x "${BIN_DIR}/phylax-analyze-traffic" && \
+        echo -e "${GREEN}   Installed:${NC} ${BIN_DIR}/phylax-analyze-traffic" || true
+    curl -sSLf "${RAW_BASE}/phylax-threat-recon.sh" -o "${BIN_DIR}/phylax-threat-recon" 2>/dev/null && \
+        chmod +x "${BIN_DIR}/phylax-threat-recon" && \
+        echo -e "${GREEN}   Installed:${NC} ${BIN_DIR}/phylax-threat-recon" || true
 fi
 
 # Generate default configuration if not present

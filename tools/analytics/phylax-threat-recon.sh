@@ -18,6 +18,7 @@ OUTPUT_JSON=0
 AUTO_REPORT=0
 MAX_IPS=10
 CUSTOM_IPS=""
+PHYLAX_WEBHOOK_URL="${PHYLAX_WEBHOOK_URL:-}"
 
 # --- Print Usage ---
 usage() {
@@ -30,7 +31,8 @@ Enriches threat actors with ASN, ISP, Geolocation, AbuseIPDB metrics, and
 observed attack vectors.
 
 Options:
-  --report          Autonomously dispatch incident dossiers to AbuseIPDB (requires ABUSEIPDB_API_KEY)
+  --report          Autonomously dispatch incident dossiers (requires ABUSEIPDB_API_KEY or PHYLAX_WEBHOOK_URL)
+  --webhook <URL>   Optional generic webhook URL for SIEM/Discord/Slack/Datadog alerting
   --json            Emit structured JSON rather than Markdown table
   -n <NUM>          Maximum IP entities to investigate (default: 10)
   -h, --help        Show this help message and exit
@@ -38,10 +40,11 @@ Options:
 
 Context Auto-Discovery ("Royalty Mode"):
   If no IP or piped log is specified, $SCRIPT_NAME interrogates local
-  system journalctl / rmediatech / matrix / conduit logs for recent 4xx/404 offenders.
+  system journalctl / rmediatech / matrix / propylea logs for recent 4xx/404 offenders.
 
 Environment:
   ABUSEIPDB_API_KEY Optional API key for AbuseIPDB v2 score check & automated reporting.
+  PHYLAX_WEBHOOK_URL Optional Webhook URL for SIEM / external alerting.
 EOF
     exit 0
 }
@@ -52,6 +55,13 @@ while [ $# -gt 0 ]; do
         --report)
             AUTO_REPORT=1
             shift
+            ;;
+        --webhook)
+            shift
+            if [ -n "${1:-}" ]; then
+                PHYLAX_WEBHOOK_URL="$1"
+                shift
+            fi
             ;;
         --json)
             OUTPUT_JSON=1
@@ -89,7 +99,7 @@ sanitize_string() {
     printf '%s' "$1" | tr -d '\000-\037\177"' | sed "s/'//g"
 }
 
-# --- Auto-load AbuseIPDB API Key if present in environment files ---
+# --- Auto-load Threat Intelligence credentials from environment or configs ---
 if [ -z "${ABUSEIPDB_API_KEY:-}" ]; then
     if [ -f "$HOME/.env" ]; then
         ABUSEIPDB_API_KEY=$(grep -E '^(export )?ABUSEIPDB_API_KEY=' "$HOME/.env" 2>/dev/null | head -n 1 | cut -d'=' -f2- | tr -d '"'\'' ' || true)
@@ -97,8 +107,27 @@ if [ -z "${ABUSEIPDB_API_KEY:-}" ]; then
     if [ -z "${ABUSEIPDB_API_KEY:-}" ] && [ -f "$HOME/.bashrc" ]; then
         ABUSEIPDB_API_KEY=$(grep -E 'ABUSEIPDB_API_KEY=' "$HOME/.bashrc" 2>/dev/null | head -n 1 | cut -d'=' -f2- | tr -d '"'\'' ' || true)
     fi
-    if [ -z "${ABUSEIPDB_API_KEY:-}" ] && [ -f "$HOME/private/projects/universals/misc.txt" ]; then
-        ABUSEIPDB_API_KEY=$(grep -oE '[a-f0-9]{80}' "$HOME/private/projects/universals/misc.txt" 2>/dev/null | head -n 1 || true)
+    if [ -z "${ABUSEIPDB_API_KEY:-}" ]; then
+        for cfg in "phylax.toml" "/etc/phylax/phylax.toml" "$HOME/.config/phylax/phylax.toml"; do
+            if [ -f "$cfg" ]; then
+                ABUSEIPDB_API_KEY=$(grep -E '^api_key\s*=\s*' "$cfg" 2>/dev/null | head -n 1 | cut -d'=' -f2- | tr -d '"'\'' ' || true)
+                [ -n "${ABUSEIPDB_API_KEY:-}" ] && break
+            fi
+        done
+    fi
+fi
+
+if [ -z "${PHYLAX_WEBHOOK_URL:-}" ]; then
+    if [ -f "$HOME/.env" ]; then
+        PHYLAX_WEBHOOK_URL=$(grep -E '^(export )?PHYLAX_WEBHOOK_URL=' "$HOME/.env" 2>/dev/null | head -n 1 | cut -d'=' -f2- | tr -d '"'\'' ' || true)
+    fi
+    if [ -z "${PHYLAX_WEBHOOK_URL:-}" ]; then
+        for cfg in "phylax.toml" "/etc/phylax/phylax.toml" "$HOME/.config/phylax/phylax.toml"; do
+            if [ -f "$cfg" ]; then
+                PHYLAX_WEBHOOK_URL=$(grep -E '^webhook_url\s*=\s*' "$cfg" 2>/dev/null | head -n 1 | cut -d'=' -f2- | tr -d '"'\'' ' || true)
+                [ -n "${PHYLAX_WEBHOOK_URL:-}" ] && break
+            fi
+        done
     fi
 fi
 
@@ -155,11 +184,14 @@ else
         # Fallback to local files if journalctl yielded nothing
         if [ ! -s "$CANDIDATES_FILE" ]; then
             for log_f in \
+                "logs/app.out.log" \
+                "../matrix/logs/app.out.log" \
+                "../rmediatech/logs/app.out.log" \
+                "/var/log/phylax/phylax.log" \
+                "/var/log/propylea/propylea.log" \
                 "/var/log/syslog" \
-                "/home/rick/private/projects/desktop/rust/matrix/logs/app.out.log" \
-                "/home/rick/private/projects/desktop/rust/rmediatech/logs/app.out.log" \
-                "/home/emhcet/private/projects/desktop/rust/matrix/logs/app.out.log" \
-                "/home/emhcet/private/projects/desktop/rust/rmediatech/logs/app.out.log"; do
+                "/var/log/nginx/access.log" \
+                "/var/log/caddy/access.log"; do
                 if [ -r "$log_f" ]; then
                     grep -E "(404|403|405|WARN|Bot)" "$log_f" 2>/dev/null | \
                         grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' | \
@@ -257,19 +289,37 @@ while IFS= read -r ip; do
 
     # 4. Autonomous Abuse Reporting
     REPORT_STATUS="Monitored"
-    if [ "$AUTO_REPORT" -eq 1 ] && [ -n "${ABUSEIPDB_API_KEY:-}" ]; then
-        REPORT_COMMENT="Phylax Edge Perimeter Defense caught unauthorized attack probe ($CAMPAIGN) from $ip against sovereign services."
-        DISPATCH_RESP=$(curl -s "https://api.abuseipdb.com/api/v2/report" \
-            -H "Key: $ABUSEIPDB_API_KEY" \
-            -H "Accept: application/json" \
-            --data-urlencode "ip=$ip" \
-            --data-urlencode "categories=15,21" \
-            --data-urlencode "comment=$REPORT_COMMENT" 2>/dev/null || echo '{}')
-        
-        if echo "$DISPATCH_RESP" | grep -q '"abuseConfidenceScore"'; then
-            REPORT_STATUS="🚨 Reported"
-        else
-            REPORT_STATUS="⚠️ Report Failed"
+    if [ "$AUTO_REPORT" -eq 1 ]; then
+        if [ -n "${ABUSEIPDB_API_KEY:-}" ]; then
+            REPORT_COMMENT="Phylax Edge Perimeter Defense caught unauthorized attack probe ($CAMPAIGN) from $ip against sovereign services."
+            DISPATCH_RESP=$(curl -s "https://api.abuseipdb.com/api/v2/report" \
+                -H "Key: $ABUSEIPDB_API_KEY" \
+                -H "Accept: application/json" \
+                --data-urlencode "ip=$ip" \
+                --data-urlencode "categories=15,21" \
+                --data-urlencode "comment=$REPORT_COMMENT" 2>/dev/null || echo '{}')
+            
+            if echo "$DISPATCH_RESP" | grep -q '"abuseConfidenceScore"'; then
+                REPORT_STATUS="🚨 AbuseIPDB Reported"
+            else
+                REPORT_STATUS="⚠️ AbuseIPDB Failed"
+            fi
+        fi
+
+        if [ -n "${PHYLAX_WEBHOOK_URL:-}" ]; then
+            WH_PAYLOAD=$(printf '{"event":"threat_detected","ip":"%s","asn":"%s","isp":"%s","campaign":"%s"}' \
+                "$ip" "$ASN" "$(sanitize_string "$ISP")" "$CAMPAIGN")
+            if curl -s -X POST -H "Content-Type: application/json" -d "$WH_PAYLOAD" "$PHYLAX_WEBHOOK_URL" 2>/dev/null >/dev/null; then
+                if [ "$REPORT_STATUS" = "Monitored" ]; then
+                    REPORT_STATUS="🚨 Webhook Alerted"
+                else
+                    REPORT_STATUS="$REPORT_STATUS + Webhook"
+                fi
+            else
+                if [ "$REPORT_STATUS" = "Monitored" ]; then
+                    REPORT_STATUS="⚠️ Webhook Failed"
+                fi
+            fi
         fi
     fi
 

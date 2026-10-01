@@ -25,10 +25,18 @@ if (-not (Test-Path $InstallDir)) {
 
 $Installed = $false
 if (-not (Test-Path "Cargo.toml")) {
-    $ReleaseUrl = "https://github.com/xuoxod/phylax/releases/latest/download/phylax-x86_64-pc-windows-msvc.zip"
+    $LatestTag = try {
+        $Resp = Invoke-WebRequest -Uri "https://github.com/xuoxod/phylax/releases/latest" -MaximumRedirection 0 -ErrorAction SilentlyContinue
+        $Resp.Headers.Location | Split-Path -Leaf
+    } catch {
+        "v0.2.1"
+    }
+    if (-not $LatestTag) { $LatestTag = "v0.2.1" }
+
+    $ReleaseUrl = "https://github.com/xuoxod/phylax/releases/download/$LatestTag/phylax-$LatestTag-x86_64-pc-windows-msvc.zip"
     $ZipPath = "$env:TEMP\phylax.zip"
     try {
-        Write-Host "🌐 Attempting to download prebuilt binary release from GitHub..." -ForegroundColor Cyan
+        Write-Host "🌐 Attempting to download prebuilt binary release ($LatestTag) from GitHub..." -ForegroundColor Cyan
         Invoke-WebRequest -Uri $ReleaseUrl -OutFile $ZipPath -UseBasicParsing -ErrorAction Stop
         Expand-Archive -Path $ZipPath -DestinationPath $InstallDir -Force
         Remove-Item $ZipPath -Force

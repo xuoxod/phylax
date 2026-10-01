@@ -82,6 +82,7 @@ struct AbuseReportingConfigToml {
     api_key: Option<String>,
     webhook_url: Option<String>,
     webhook_auth: Option<String>,
+    syslog_cef: Option<bool>,
 }
 
 #[derive(serde::Deserialize, Debug, Default)]
@@ -130,7 +131,7 @@ struct ServeArgs {
     #[arg(long, num_args(0..=1), default_missing_value = "true")]
     quarantine: Option<bool>,
 
-    /// Enable collaborative threat reporting to AbuseIPDB
+    /// Enable collaborative threat reporting (AbuseIPDB, Webhooks, SIEM)
     #[arg(long, num_args(0..=1), default_missing_value = "true")]
     abuse_reporting: Option<bool>,
 
@@ -145,6 +146,10 @@ struct ServeArgs {
     /// Optional webhook authorization header (e.g. "Bearer token" or "ApiKey secret")
     #[arg(long, env = "PHYLAX_WEBHOOK_AUTH")]
     webhook_auth: Option<String>,
+
+    /// Enable local Syslog CEF (Common Event Format) logging for threat events (zero external calls)
+    #[arg(long, num_args(0..=1), default_missing_value = "true", env = "PHYLAX_SYSLOG_CEF")]
+    syslog_cef: Option<bool>,
 
     /// Autonomous in-memory maintenance sweep interval in seconds
     #[arg(long)]
@@ -247,6 +252,7 @@ async fn run_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Error>> {
         abuseipdb_key,
         webhook_url,
         webhook_auth,
+        syslog_cef,
     ) = {
         let mut config_file: Option<PhylaxConfigFile> = None;
         if let Some(path) = &args.config {
@@ -431,6 +437,16 @@ async fn run_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Error>> {
             })
             .filter(|k| !k.is_empty());
 
+        let syslog_cef = args
+            .syslog_cef
+            .or_else(|| {
+                config_file
+                    .as_ref()
+                    .and_then(|c| c.abuse_reporting.as_ref())
+                    .and_then(|a| a.syslog_cef)
+            })
+            .unwrap_or(false);
+
         (
             listen,
             upstream,
@@ -450,6 +466,7 @@ async fn run_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Error>> {
             abuseipdb_key,
             webhook_url,
             webhook_auth,
+            syslog_cef,
         )
     };
 
@@ -480,13 +497,14 @@ async fn run_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     #[cfg(feature = "abuse-reporting")]
     if abuse_reporting_enabled {
-        let is_dry = abuse_dry_run || (abuseipdb_key.is_none() && webhook_url.is_none());
+        let is_dry = abuse_dry_run || (!syslog_cef && abuseipdb_key.is_none() && webhook_url.is_none());
         let informant_config = phylax::abuse_reporting::InformantConfig {
             enabled: true,
             dry_run: is_dry,
             api_key: abuseipdb_key.clone(),
             webhook_url: webhook_url.clone(),
             webhook_auth: webhook_auth.clone(),
+            syslog_cef,
             cooldown: phylax::abuse_reporting::CooldownConfig::default(),
         };
         builder = builder.with_abuse_reporting(informant_config);
@@ -494,6 +512,9 @@ async fn run_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Error>> {
             "  📡 Collaborative Abuse Reporting: ENABLED (Dry-Run: {})",
             is_dry
         );
+        if syslog_cef {
+            println!("     • Syslog / CEF Sink: Armed (Local Audit Logging)");
+        }
         if let Some(ref key) = abuseipdb_key {
             println!(
                 "     • AbuseIPDB Sink: Armed (Key: ...{})",
@@ -846,6 +867,7 @@ async fn run_check_ip(args: CheckIpArgs) -> Result<(), Box<dyn std::error::Error
             api_key: Some(key.clone()),
             webhook_url: None,
             webhook_auth: None,
+            syslog_cef: false,
             cooldown: phylax::abuse_reporting::CooldownConfig::default(),
         };
         let engine = phylax::abuse_reporting::InformantEngine::new(config, Arc::new(transport));
@@ -926,20 +948,22 @@ quarantine_duration_ms = 86400000
 sweep_interval_s = 60
 
 [abuse_reporting]
-# Opt-in collaborative reporting to AbuseIPDB
+# Opt-in collaborative reporting (AbuseIPDB, Generic Webhooks, Datadog, Slack, SIEM)
 enabled = false
 
 # Dry-run mode formats reports without external HTTP dispatch
 dry_run = true
 
-# AbuseIPDB v2 API key (or specify via ABUSEIPDB_API_KEY environment variable)
-api_key = ""
-
-# Generic Webhook destination URL for SIEM, Datadog, Slack, or internal SOC
+# Threat Intelligence & Incident Sinks (Completely Vendor-Agnostic / BYOK):
+# 1. Generic Webhook Sink (Datadog, Splunk, Wazuh, Slack, Discord, internal SIEM)
 # webhook_url = "https://siem.example.com/api/v1/incidents"
+# webhook_auth = "Bearer your-token-here"
 
-# Webhook Authorization header (e.g. "Bearer secret-token" or "ApiKey xyz")
-# webhook_auth = ""
+# 2. Syslog / CEF (Common Event Format) for local SIEM / syslog daemons (zero external calls)
+# syslog_cef = false
+
+# 3. AbuseIPDB Community Reporting (optional)
+# api_key = "YOUR_ABUSEIPDB_API_KEY"
 "#;
 
     std::fs::write(&args.output, config_content)?;
