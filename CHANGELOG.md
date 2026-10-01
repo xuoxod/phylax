@@ -4,6 +4,20 @@ All notable changes, defense layer releases, and architectural milestones for **
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-10-01 (Threat Reconnaissance Hardening & Production Tooling)
+
+### 🌟 Added & Enhanced
+* **Production Build & Deployment Tooling (`Makefile` & `scripts/install.sh`)**:
+  - Added centralized `Makefile` supporting `build`, `release`, `test`, `test-analytics`, and `install` targets.
+  - Enhanced `scripts/install.sh` to install both the core `phylax` CLI engine and the cross-platform analytics suite (`phylax-analyze-traffic`, `phylax-threat-recon`) to `~/.local/bin`.
+* **Host Journalctl Auto-Discovery & Resilient Piping**:
+  - Implemented automatic fallback to host `journalctl -u propylea.service` and system log facilities in `phylax-analyze-traffic` when explicit file paths are omitted.
+  - Added non-blocking FIFO/pipe detection preventing hang states during piped standard input processing.
+* **Autonomous AbuseIPDB Forensics (`phylax-threat-recon`)**:
+  - Integrated real-time IP reputation checks, score caching, and threat vector correlation directly into the analytics toolkit.
+* **Adversarial Test Assertions**:
+  - Verified 51/51 core unit tests, 4/4 POC TDD analytics tests, and 4/4 red-team fuzzer vectors.
+
 ---
 
 ## [0.2.0] - 2026-09-28 (Sovereign Observability & Red-Team Suite)
