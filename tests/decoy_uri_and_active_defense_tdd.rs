@@ -250,3 +250,56 @@ fn test_decoy_uri_custom_builder_configuration() {
         })
     );
 }
+
+#[test]
+fn test_adversarial_path_evasion_and_normalization() {
+    let sentinel = DecoyUriSentinel::default();
+
+    // Adversarial evasion techniques attempted by automated scanners and red teams:
+    // 1. Multi-slash bypass: "//.env", "///.env"
+    assert!(matches!(
+        sentinel.evaluate("//.env"),
+        DecoyUriVerdict::Trapped { category: DecoyCategory::EnvironmentSecret, .. }
+    ));
+    assert!(matches!(
+        sentinel.evaluate("///.env"),
+        DecoyUriVerdict::Trapped { category: DecoyCategory::EnvironmentSecret, .. }
+    ));
+
+    // 2. Hex/Percent-encoding evasion: "/%2e%65%6e%76" -> "/.env"
+    assert!(matches!(
+        sentinel.evaluate("/%2e%65%6e%76"),
+        DecoyUriVerdict::Trapped { category: DecoyCategory::EnvironmentSecret, .. }
+    ));
+    assert!(matches!(
+        sentinel.evaluate("/%2eenv"),
+        DecoyUriVerdict::Trapped { category: DecoyCategory::EnvironmentSecret, .. }
+    ));
+
+    // 3. Dot-segment evasion: "/./.env", "/foo/../.env"
+    assert!(matches!(
+        sentinel.evaluate("/./.env"),
+        DecoyUriVerdict::Trapped { category: DecoyCategory::EnvironmentSecret, .. }
+    ));
+    assert!(matches!(
+        sentinel.evaluate("/foo/../.env"),
+        DecoyUriVerdict::Trapped { category: DecoyCategory::EnvironmentSecret, .. }
+    ));
+
+    // 4. Trailing slash and query evasion: "/.env/", "/.env?test=1", "/.env#section"
+    assert!(matches!(
+        sentinel.evaluate("/.env/"),
+        DecoyUriVerdict::Trapped { category: DecoyCategory::EnvironmentSecret, .. }
+    ));
+    assert!(matches!(
+        sentinel.evaluate("/.env?test=1"),
+        DecoyUriVerdict::Trapped { category: DecoyCategory::EnvironmentSecret, .. }
+    ));
+
+    // 5. Mixed evasions: "//foo/./../%2eenv?token=leak"
+    assert!(matches!(
+        sentinel.evaluate("//foo/./../%2eenv?token=leak"),
+        DecoyUriVerdict::Trapped { category: DecoyCategory::EnvironmentSecret, .. }
+    ));
+}
+

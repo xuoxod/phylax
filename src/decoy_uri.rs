@@ -203,12 +203,49 @@ impl DecoyUriSentinel {
         self.exact_traps.read().len() + self.prefix_traps.read().len()
     }
 
-    /// Normalizes a URI path (removes query/fragment, collapses multiple slashes, converts to lowercase)
+    /// Percent-decode ASCII hexadecimal sequences e.g. "%2e" -> "."
+    #[inline]
+    pub fn percent_decode(s: &str) -> String {
+        if !s.contains('%') {
+            return s.to_string();
+        }
+        let bytes = s.as_bytes();
+        let mut out = Vec::with_capacity(bytes.len());
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == b'%' && i + 2 < bytes.len() {
+                let h1 = match bytes[i + 1] {
+                    b'0'..=b'9' => Some(bytes[i + 1] - b'0'),
+                    b'a'..=b'f' => Some(bytes[i + 1] - b'a' + 10),
+                    b'A'..=b'F' => Some(bytes[i + 1] - b'A' + 10),
+                    _ => None,
+                };
+                let h2 = match bytes[i + 2] {
+                    b'0'..=b'9' => Some(bytes[i + 2] - b'0'),
+                    b'a'..=b'f' => Some(bytes[i + 2] - b'a' + 10),
+                    b'A'..=b'F' => Some(bytes[i + 2] - b'A' + 10),
+                    _ => None,
+                };
+                if let (Some(h1), Some(h2)) = (h1, h2) {
+                    out.push((h1 << 4) | h2);
+                    i += 3;
+                    continue;
+                }
+            }
+            out.push(bytes[i]);
+            i += 1;
+        }
+        String::from_utf8_lossy(&out).into_owned()
+    }
+
+    /// Normalizes a URI path (decodes percent encoding, removes query/fragment, collapses multiple slashes and dot segments, converts to lowercase)
     #[inline]
     pub fn normalize_path(raw_path: &str) -> String {
-        let path_without_query = match raw_path.find('?') {
-            Some(idx) => &raw_path[..idx],
-            None => raw_path,
+        let decoded = Self::percent_decode(raw_path);
+
+        let path_without_query = match decoded.find('?') {
+            Some(idx) => &decoded[..idx],
+            None => &decoded,
         };
 
         let path_without_hash = match path_without_query.find('#') {
@@ -217,29 +254,34 @@ impl DecoyUriSentinel {
         };
 
         let trimmed = path_without_hash.trim();
-        if trimmed.is_empty() {
+        if trimmed.is_empty() || trimmed == "/" {
             return "/".to_string();
         }
 
-        // Collapse multi-slashes e.g. "//.env" -> "/.env"
-        let mut normalized = String::with_capacity(trimmed.len());
-        let mut last_was_slash = false;
-
-        for ch in trimmed.chars() {
-            let lower = ch.to_ascii_lowercase();
-            if lower == '/' {
-                if !last_was_slash {
-                    normalized.push('/');
-                    last_was_slash = true;
-                }
+        // Segment-based canonicalization: collapses '//', '/./', and '/../'
+        let mut segments: Vec<&str> = Vec::new();
+        for seg in trimmed.split('/') {
+            let s = seg.trim();
+            if s.is_empty() || s == "." {
+                continue;
+            }
+            if s == ".." {
+                segments.pop();
             } else {
-                normalized.push(lower);
-                last_was_slash = false;
+                segments.push(s);
             }
         }
 
-        if !normalized.starts_with('/') {
-            normalized.insert(0, '/');
+        if segments.is_empty() {
+            return "/".to_string();
+        }
+
+        let mut normalized = String::with_capacity(trimmed.len() + 1);
+        for seg in segments {
+            normalized.push('/');
+            for ch in seg.chars() {
+                normalized.push(ch.to_ascii_lowercase());
+            }
         }
 
         normalized
@@ -251,11 +293,12 @@ impl DecoyUriSentinel {
             return DecoyUriVerdict::Clean;
         }
 
-        // Fast-path: If path is already clean lowercase with no query/multi-slash, avoid all heap allocations
+        // Fast-path: If path is already clean lowercase with no query/multi-slash/percent, avoid all heap allocations
         let needs_normalization = raw_path
             .bytes()
-            .any(|b| b.is_ascii_uppercase() || b == b'?' || b == b'#' || b == b'\\')
-            || raw_path.contains("//");
+            .any(|b| b.is_ascii_uppercase() || b == b'?' || b == b'#' || b == b'\\' || b == b'%')
+            || raw_path.contains("//")
+            || raw_path.contains("/.");
 
         if !needs_normalization {
             let path = raw_path.trim();
