@@ -4,6 +4,27 @@ All notable changes, defense layer releases, and architectural milestones for **
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-10-01 (Dynamic Self-Healing BotGuard, Penetration Testing Arsenal & Canary Traps)
+
+### 🌟 Added & Fortified
+* **Autonomous Dynamic Bot Registry (`DynamicBotRegistry`)**:
+  - In-memory, thread-safe, bounded auto-learning registry (`DynamicBotRegistry`) for real-time bot harvesting.
+  - When an uncatalogued crawler or scanner trips an invisible honeylink or canary trap, its signature token is autonomously extracted, sanitized, and stored.
+  - Subsequent incoming requests bearing that signature from **any** IP are preemptively dropped at Layer 14 with `403 Forbidden` without human intervention or server restart.
+  - Memory guardrail: Bounded capacity with deterministic LRU eviction.
+  - Poisoning immunity: Strictly protects common human browsers (`Mozilla`, `Chrome`, `Safari`, `WebKit`), developer CLI tools (`curl`, `wget`), and verified search indexers (`Googlebot`, `Bingbot`).
+* **Kali Linux & Offensive Security Penetration Arsenal Coverage**:
+  - Expanded `AUTOMATION_TOOL_SIGNATURES` with comprehensive offensive security, exploit, and forensics signatures:
+    - **Fuzzers & Content Discovery**: `ffuf`, `feroxbuster`, `dirsearch`, `DirBuster`, `Gobuster`, `wfuzz`, `Nuclei`, `Arjun`, `ParamSpider`
+    - **Vulnerability Scanners**: `Acunetix`, `Nessus`, `OpenVAS`, `BurpSuite`, `BurpCollaborator`, `OWASP ZAP`, `Arachni`, `WhatWeb`, `WPRecon`, `WPScan`, `Netsparker`, `QualysGuard`, `Qualys`
+    - **Exploit & Injection Engines**: `sqlmap`, `SQLNinja`, `Commix`, `Havij`, `Metasploit`
+    - **Password Sprayers & Bruteforcers**: `THC-Hydra`, `Medusa`, `Patator`, `Crowbar`
+    - **Network Scanners & Asset Recon**: `RustScan`, `OWASP Amass`, `Sublist3r`, `assetfinder`, `Katana`, `zgrab`, `masscan`, `nmap`, `nikto`
+    - **Forensics Suites**: `EnCase`, `Autopsy`, `SleuthKit`, `X-Ways`, `Magnet AXIOM`
+* **Adversarial Self-Attack TDD Invariants**:
+  - Added `test_adversarial_kali_and_offensive_penetration_arsenal` verifying zero bypasses across the offensive security arsenal.
+  - Added `test_adversarial_dynamic_self_healing_honeylink_harvesting` verifying dynamic self-healing lifecycle and browser spoofing immunity.
+
 ## [0.2.2] - 2026-10-01 (Sovereign BotGuard, AI Harvester Interception & RFC 9309 Defense)
 
 ### 🌟 Added & Enhanced

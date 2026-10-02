@@ -45,8 +45,9 @@ pub mod abuse_reporting;
 pub use adaptive_pow::{AdaptivePowConfig, AdaptivePowEngine, InfractionSeverity};
 pub use autonomous_quarantine::{AutonomousQuarantine, QuarantineConfig};
 pub use bot_guard::{
-    BotCategory, BotGuard, BotVerdict, AI_SCRAPER_SIGNATURES, AUTOMATION_TOOL_SIGNATURES,
-    LEGITIMATE_SEARCH_SIGNATURES, RECON_SCANNER_SIGNATURES,
+    BotCategory, BotGuard, BotVerdict, DynamicBotRecord, DynamicBotRegistry,
+    AI_SCRAPER_SIGNATURES, AUTOMATION_TOOL_SIGNATURES, LEGITIMATE_SEARCH_SIGNATURES,
+    RECON_SCANNER_SIGNATURES,
 };
 pub use cache_shield::{CacheShield, CacheShieldConfig, CacheVerdict, CachedResponse};
 pub use credential_guard::{BreachedPasswordBloomFilter, CredentialGuard, CredentialVerdict};

@@ -225,3 +225,100 @@ fn test_adversarial_zero_false_positives_for_search_and_browsers() {
         );
     }
 }
+
+#[test]
+fn test_adversarial_kali_and_offensive_penetration_arsenal() {
+    let guard = BotGuard::new();
+
+    let offensive_tools = [
+        ("ffuf/v2.1.0", "ffuf"),
+        ("feroxbuster/2.10.1", "feroxbuster"),
+        ("dirsearch/0.4.3", "dirsearch"),
+        ("DirBuster-1.0-RC1", "DirBuster"),
+        ("gobuster/3.6", "Gobuster"),
+        ("wfuzz/3.1.0", "wfuzz"),
+        ("nuclei/v3.2.0", "Nuclei"),
+        ("Acunetix-Web-Vulnerability-Scanner/15.0", "Acunetix"),
+        ("Nessus/10.7.0", "Nessus"),
+        ("OpenVAS/22.4", "OpenVAS"),
+        ("BurpSuiteCommunity/2024.1", "BurpSuite"),
+        ("OWASP-ZAP/2.14.0", "OWASP ZAP"),
+        ("Arachni/v1.6.1", "Arachni"),
+        ("WhatWeb/0.5.5", "WhatWeb"),
+        ("wprecon/1.0", "WPRecon"),
+        ("WPScan v3.8.25", "WPScan"),
+        ("Netsparker/23.11", "Netsparker"),
+        ("QualysGuard-Scan/1.0", "QualysGuard"),
+        ("RustScan/2.1.1", "RustScan"),
+        ("OWASP-Amass/4.2.0", "OWASP Amass"),
+        ("Katana/1.0.5", "Katana"),
+        ("sqlmap/1.8.3#stable", "sqlmap"),
+        ("SQLNinja/0.2.6", "SQLNinja"),
+        ("Commix/v3.8", "Commix"),
+        ("Havij/1.17Pro", "Havij"),
+        ("metasploit-framework/v6.3.55", "Metasploit"),
+        ("THC-Hydra v9.5", "THC-Hydra"),
+        ("Medusa/2.2", "Medusa"),
+        ("Patator/1.0", "Patator"),
+        ("EnCase Forensic/21.4", "EnCase"),
+        ("Autopsy/4.21.0", "Autopsy"),
+        ("SleuthKit/4.12.1", "SleuthKit"),
+        ("Magnet-AXIOM/7.9", "Magnet AXIOM"),
+    ];
+
+    for (ua, expected_token) in offensive_tools {
+        let (cat, matched) = guard.classify(ua);
+        assert_eq!(
+            cat,
+            BotCategory::AutomationTool,
+            "Offensive security tool bypassed classifier: '{}'",
+            ua
+        );
+        assert_eq!(
+            matched.as_deref(),
+            Some(expected_token),
+            "Matched token mismatch for: '{}'",
+            ua
+        );
+
+        let verdict = guard.evaluate_perimeter(Some(ua), "/api/v1/auth/login");
+        assert!(
+            verdict.is_blocked(),
+            "Perimeter permitted offensive pen-test probe: '{}'",
+            ua
+        );
+    }
+}
+
+#[test]
+fn test_adversarial_dynamic_self_healing_honeylink_harvesting() {
+    let guard = BotGuard::new();
+
+    // Adversary uses a custom, previously uncatalogued scanner
+    let hostile_custom_crawler = "CustomDarkScanner/3.4 (CyberCrimeResearch; stealth-probe)";
+
+    // Initial state: unrecognized
+    let verdict_before = guard.evaluate_perimeter(Some(hostile_custom_crawler), "/downloads");
+    assert!(verdict_before.is_allowed());
+
+    // Adversary trips the invisible canary trap honeylink: /_sovereign/canary_trap
+    let harvested = guard.harvest_canary_probe(
+        Some(hostile_custom_crawler),
+        "Tripped invisible canary trap",
+        1_700_000_000_000,
+    );
+    assert_eq!(harvested.as_deref(), Some("CustomDarkScanner"));
+
+    // Preemptive Defense Activated: All subsequent requests with this User-Agent are dropped!
+    let verdict_after = guard.evaluate_perimeter(Some(hostile_custom_crawler), "/downloads");
+    assert!(
+        verdict_after.is_blocked(),
+        "Dynamic self-healing failed to drop harvested scanner!"
+    );
+
+    // Protected browser tokens are immune to malicious poisoning
+    let browser_spoof = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/129.0.0.0 Safari/537.36";
+    let poisoned = guard.harvest_canary_probe(Some(browser_spoof), "Attempted poison", 1_700_000_000_000);
+    assert!(poisoned.is_none(), "Protected browser tokens must never be harvested");
+}
+

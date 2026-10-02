@@ -7,7 +7,11 @@
 //! Enforces RFC 9309 and preserves access for verified legitimate search engines (Googlebot, Bingbot)
 //! and official developer CLI installer channels (curl, wget on /install and /bin).
 
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 /// High-level classification of an incoming HTTP User-Agent
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -16,7 +20,7 @@ pub enum BotCategory {
     AiScraper,
     /// Technology stack profilers, vulnerability scanners, and commercial SEO harvesters
     ReconScanner,
-    /// Automated scripting libraries, headless browser drivers, and exploit fuzzers
+    /// Automated scripting libraries, headless browser drivers, exploit fuzzers, and penetration testing tools
     AutomationTool,
     /// Legitimate public search engines (allowed on public storefront paths)
     LegitimateSearch,
@@ -58,11 +62,19 @@ pub enum BotVerdict {
     },
     Blocked {
         category: BotCategory,
-        matched_token: &'static str,
+        matched_token: Cow<'static, str>,
     },
 }
 
 impl BotVerdict {
+    #[inline]
+    pub fn matched_token(&self) -> Option<&str> {
+        match self {
+            BotVerdict::Blocked { matched_token, .. } => Some(matched_token.as_ref()),
+            _ => None,
+        }
+    }
+
     #[inline]
     pub fn is_blocked(&self) -> bool {
         matches!(self, BotVerdict::Blocked { .. })
@@ -174,7 +186,7 @@ pub const RECON_SCANNER_SIGNATURES: &[(&str, &str)] = &[
     ("turnitinbot", "TurnitinBot"),
 ];
 
-/// Automation frameworks, headless browsers, and attack tools.
+/// Automation frameworks, headless browsers, attack tools, and penetration testing suites.
 pub const AUTOMATION_TOOL_SIGNATURES: &[(&str, &str)] = &[
     // Headless Browser Drivers
     ("headlesschrome", "HeadlessChrome"),
@@ -191,15 +203,59 @@ pub const AUTOMATION_TOOL_SIGNATURES: &[(&str, &str)] = &[
     ("httpx", "httpx"),
     ("libwww-perl", "libwww-perl"),
     ("postmanruntime", "PostmanRuntime"),
-    // Vulnerability & Port Scanners
+    // Kali Linux & Offensive Security Fuzzers & Content Discovery
+    ("ffuf", "ffuf"),
+    ("feroxbuster", "feroxbuster"),
+    ("dirsearch", "dirsearch"),
+    ("dirbuster", "DirBuster"),
+    ("gobuster", "Gobuster"),
+    ("wfuzz", "wfuzz"),
+    ("nuclei", "Nuclei"),
+    ("arjun", "Arjun"),
+    ("paramspider", "ParamSpider"),
+    // Vulnerability & Web Application Scanners
+    ("acunetix", "Acunetix"),
+    ("nessus", "Nessus"),
+    ("openvas", "OpenVAS"),
+    ("burpcollaborator", "BurpCollaborator"),
+    ("burpsuite", "BurpSuite"),
+    ("owasp-zap", "OWASP ZAP"),
+    ("zaproxy", "OWASP ZAP"),
+    ("arachni", "Arachni"),
+    ("whatweb", "WhatWeb"),
+    ("wprecon", "WPRecon"),
+    ("wpscan", "WPScan"),
+    ("netsparker", "Netsparker"),
+    ("qualysguard", "QualysGuard"),
+    ("qualys", "Qualys"),
+    // Port Scanners, Asset Finders & Network Recon
     ("zgrab", "zgrab"),
     ("masscan", "masscan"),
     ("nmap", "nmap"),
     ("nikto", "nikto"),
+    ("rustscan", "RustScan"),
+    ("sublist3r", "Sublist3r"),
+    ("amass", "OWASP Amass"),
+    ("assetfinder", "assetfinder"),
+    ("katana", "Katana"),
+    // Exploitation Frameworks & Injection Engines
     ("sqlmap", "sqlmap"),
-    ("dirbuster", "dirbuster"),
-    ("gobuster", "gobuster"),
-    ("wfuzz", "wfuzz"),
+    ("sqlninja", "SQLNinja"),
+    ("commix", "Commix"),
+    ("havij", "Havij"),
+    ("metasploit", "Metasploit"),
+    // Password Sprayers & Credential Bruteforcers
+    ("hydra", "THC-Hydra"),
+    ("medusa", "Medusa"),
+    ("patator", "Patator"),
+    ("crowbar", "Crowbar"),
+    // Digital Forensics & Ingestion Engines (Automated Extraction)
+    ("encase", "EnCase"),
+    ("autopsy", "Autopsy"),
+    ("sleuthkit", "SleuthKit"),
+    ("x-ways", "X-Ways"),
+    ("magnet-axiom", "Magnet AXIOM"),
+    ("axiom", "Magnet AXIOM"),
 ];
 
 /// Legitimate public search engines permitted on public storefront routes.
@@ -215,18 +271,188 @@ pub const LEGITIMATE_SEARCH_SIGNATURES: &[(&str, &str)] = &[
     ("qwantify", "Qwantify"),
 ];
 
+/// Record of an autonomously harvested bot signature
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DynamicBotRecord {
+    pub signature: String,
+    pub original_ua_sample: String,
+    pub reason: String,
+    pub hits: u64,
+    pub first_seen_ms: u64,
+    pub last_seen_ms: u64,
+}
+
+/// Dynamic, self-healing bot registry that autonomously expands when new crawlers or scanners trip honeypots
+#[derive(Debug, Clone)]
+pub struct DynamicBotRegistry {
+    max_capacity: usize,
+    entries: Arc<RwLock<HashMap<String, DynamicBotRecord>>>,
+}
+
+impl Default for DynamicBotRegistry {
+    fn default() -> Self {
+        Self::new(10_000)
+    }
+}
+
+impl DynamicBotRegistry {
+    pub fn new(max_capacity: usize) -> Self {
+        Self {
+            max_capacity,
+            entries: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    /// Number of actively harvested dynamic signatures
+    pub fn len(&self) -> usize {
+        self.entries.read().len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.read().is_empty()
+    }
+
+    /// Autonomously harvest a malicious User-Agent from a trapped probe (e.g. Canary Trap or Honeypot).
+    /// Returns the harvested signature token if successfully admitted.
+    pub fn harvest(&self, raw_ua: &str, reason: &str, now_ms: u64) -> Option<String> {
+        let trimmed = raw_ua.trim();
+        if trimmed.is_empty() || trimmed.len() > 1024 {
+            return None;
+        }
+
+        // Extract a distinctive token (e.g., first segment or full token up to 64 chars)
+        let token = Self::extract_signature_token(trimmed)?;
+        let key = token.to_ascii_lowercase();
+
+        // Safety Invariant: Protect common human browsers, search bots, and CLI tools from accidental harvesting
+        if Self::is_protected_token(&key) {
+            return None;
+        }
+
+        let mut lock = self.entries.write();
+        if let Some(record) = lock.get_mut(&key) {
+            record.hits = record.hits.saturating_add(1);
+            record.last_seen_ms = now_ms;
+            return Some(token);
+        }
+
+        // Enforce bounded memory guardrail (LRU prune if capacity reached)
+        if lock.len() >= self.max_capacity {
+            if let Some(oldest_key) = lock
+                .iter()
+                .min_by_key(|(_, r)| r.last_seen_ms)
+                .map(|(k, _)| k.clone())
+            {
+                lock.remove(&oldest_key);
+            }
+        }
+
+        lock.insert(
+            key,
+            DynamicBotRecord {
+                signature: token.clone(),
+                original_ua_sample: trimmed.chars().take(256).collect(),
+                reason: reason.to_string(),
+                hits: 1,
+                first_seen_ms: now_ms,
+                last_seen_ms: now_ms,
+            },
+        );
+
+        Some(token)
+    }
+
+    /// Check if an incoming User-Agent matches any dynamically harvested signature
+    pub fn check_ua(&self, user_agent: &str) -> Option<String> {
+        let lock = self.entries.read();
+        if lock.is_empty() {
+            return None;
+        }
+
+        let ua_bytes = user_agent.as_bytes();
+        for (needle_lower, record) in lock.iter() {
+            if BotGuard::contains_ignore_case(ua_bytes, needle_lower.as_bytes()) {
+                return Some(record.signature.clone());
+            }
+        }
+        None
+    }
+
+    /// Extract a distinctive signature token from raw User-Agent
+    fn extract_signature_token(ua: &str) -> Option<String> {
+        let first_part = ua
+            .split(|c: char| c == '/' || c == ' ' || c == ';' || c == '(')
+            .next()?
+            .trim();
+        if first_part.len() < 3 {
+            return None;
+        }
+        Some(first_part.chars().take(64).collect())
+    }
+
+    /// Safety filter to prevent blocking benign clients
+    fn is_protected_token(lower: &str) -> bool {
+        matches!(
+            lower,
+            "mozilla"
+                | "chrome"
+                | "safari"
+                | "webkit"
+                | "gecko"
+                | "applewebkit"
+                | "edge"
+                | "edg"
+                | "curl"
+                | "wget"
+                | "googlebot"
+                | "bingbot"
+                | "duckduckbot"
+                | "yandexbot"
+                | "baiduspider"
+        )
+    }
+}
+
 /// Sovereign Bot Guard Engine
-#[derive(Debug, Clone, Default)]
-pub struct BotGuard;
+#[derive(Debug, Clone)]
+pub struct BotGuard {
+    dynamic_registry: Arc<DynamicBotRegistry>,
+}
+
+impl Default for BotGuard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl BotGuard {
     pub fn new() -> Self {
-        Self
+        Self {
+            dynamic_registry: Arc::new(DynamicBotRegistry::default()),
+        }
+    }
+
+    pub fn with_dynamic_registry(dynamic_registry: Arc<DynamicBotRegistry>) -> Self {
+        Self { dynamic_registry }
+    }
+
+    pub fn dynamic_registry(&self) -> &Arc<DynamicBotRegistry> {
+        &self.dynamic_registry
+    }
+
+    /// Autonomously learn and register a new bot signature from a tripped honeylink or canary trap
+    pub fn harvest_canary_probe(
+        &self,
+        user_agent: Option<&str>,
+        reason: &str,
+        now_ms: u64,
+    ) -> Option<String> {
+        user_agent.and_then(|ua| self.dynamic_registry.harvest(ua, reason, now_ms))
     }
 
     /// Case-insensitive ASCII substring search without heap allocation.
     #[inline]
-    fn contains_ignore_case(haystack_bytes: &[u8], needle_lower: &[u8]) -> bool {
+    pub fn contains_ignore_case(haystack_bytes: &[u8], needle_lower: &[u8]) -> bool {
         if needle_lower.is_empty() {
             return true;
         }
@@ -253,7 +479,7 @@ impl BotGuard {
     }
 
     /// Classify an arbitrary User-Agent string in sub-microsecond time.
-    pub fn classify(&self, user_agent: &str) -> (BotCategory, Option<&'static str>) {
+    pub fn classify(&self, user_agent: &str) -> (BotCategory, Option<Cow<'static, str>>) {
         let trimmed = user_agent.trim();
         if trimmed.is_empty() {
             return (BotCategory::Unknown, None);
@@ -263,7 +489,7 @@ impl BotGuard {
         if trimmed.len() > 4096 {
             return (
                 BotCategory::AutomationTool,
-                Some("Header-Exhaustion-Bomb"),
+                Some(Cow::Borrowed("Header-Exhaustion-Bomb")),
             );
         }
 
@@ -272,46 +498,51 @@ impl BotGuard {
         // 1. Check AI Scrapers FIRST (e.g. google-extended must trigger before googlebot)
         for &(needle, display_name) in AI_SCRAPER_SIGNATURES {
             if Self::contains_ignore_case(bytes, needle.as_bytes()) {
-                return (BotCategory::AiScraper, Some(display_name));
+                return (BotCategory::AiScraper, Some(Cow::Borrowed(display_name)));
             }
         }
 
         // 2. Check Reconnaissance Profilers & SEO Scrapers
         for &(needle, display_name) in RECON_SCANNER_SIGNATURES {
             if Self::contains_ignore_case(bytes, needle.as_bytes()) {
-                return (BotCategory::ReconScanner, Some(display_name));
+                return (BotCategory::ReconScanner, Some(Cow::Borrowed(display_name)));
             }
         }
 
-        // 3. Check Automation Tools & Vulnerability Scanners
+        // 3. Check Automation Tools & Vulnerability Scanners (Static Signatures)
         for &(needle, display_name) in AUTOMATION_TOOL_SIGNATURES {
             if Self::contains_ignore_case(bytes, needle.as_bytes()) {
-                return (BotCategory::AutomationTool, Some(display_name));
+                return (BotCategory::AutomationTool, Some(Cow::Borrowed(display_name)));
             }
         }
 
-        // 4. Check Developer CLI Utilities (curl, wget)
+        // 4. Check Dynamic Self-Healing Registry (Preemptive Defense)
+        if let Some(matched) = self.dynamic_registry.check_ua(trimmed) {
+            return (BotCategory::AutomationTool, Some(Cow::Owned(matched)));
+        }
+
+        // 5. Check Developer CLI Utilities (curl, wget)
         if Self::contains_ignore_case(bytes, b"curl/")
             || Self::contains_ignore_case(bytes, b"wget/")
             || trimmed.eq_ignore_ascii_case("curl")
             || trimmed.eq_ignore_ascii_case("wget")
         {
-            return (BotCategory::CliUtility, Some("CLI-Utility"));
+            return (BotCategory::CliUtility, Some(Cow::Borrowed("CLI-Utility")));
         }
 
-        // 5. Check Legitimate Public Search Engines
+        // 6. Check Legitimate Public Search Engines
         for &(needle, display_name) in LEGITIMATE_SEARCH_SIGNATURES {
             if Self::contains_ignore_case(bytes, needle.as_bytes()) {
-                return (BotCategory::LegitimateSearch, Some(display_name));
+                return (BotCategory::LegitimateSearch, Some(Cow::Borrowed(display_name)));
             }
         }
 
-        // 6. Generic Python script check
+        // 7. Generic Python script check
         if Self::contains_ignore_case(bytes, b"python") {
-            return (BotCategory::AutomationTool, Some("Python-Script"));
+            return (BotCategory::AutomationTool, Some(Cow::Borrowed("Python-Script")));
         }
 
-        // 7. Check Standard Interactive Human Web Browsers
+        // 8. Check Standard Interactive Human Web Browsers
         if Self::contains_ignore_case(bytes, b"mozilla/") {
             return (BotCategory::LegitimateBrowser, None);
         }
@@ -371,7 +602,7 @@ impl BotGuard {
         if category.is_unwanted() {
             return BotVerdict::Blocked {
                 category,
-                matched_token: matched_token.unwrap_or("Unwanted-Automated-Bot"),
+                matched_token: matched_token.unwrap_or(Cow::Borrowed("Unwanted-Automated-Bot")),
             };
         }
 
@@ -391,20 +622,20 @@ mod tests {
         // Old names
         let (cat1, tok1) = guard.classify("ClaudeBot/1.0; +claudebot@anthropic.com");
         assert_eq!(cat1, BotCategory::AiScraper);
-        assert_eq!(tok1, Some("ClaudeBot"));
+        assert_eq!(tok1.as_deref(), Some("ClaudeBot"));
 
         let (cat2, tok2) = guard.classify("anthropic-ai/1.0");
         assert_eq!(cat2, BotCategory::AiScraper);
-        assert_eq!(tok2, Some("anthropic-ai"));
+        assert_eq!(tok2.as_deref(), Some("anthropic-ai"));
 
         // New names (discovered in battlefield audit)
         let (cat3, tok3) = guard.classify("Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Claude-SearchBot/1.0; +https://www.anthropic.com/claudebot)");
         assert_eq!(cat3, BotCategory::AiScraper);
-        assert_eq!(tok3, Some("Claude-SearchBot"));
+        assert_eq!(tok3.as_deref(), Some("Claude-SearchBot"));
 
         let (cat4, tok4) = guard.classify("Claude-Web/1.0");
         assert_eq!(cat4, BotCategory::AiScraper);
-        assert_eq!(tok4, Some("Claude-Web"));
+        assert_eq!(tok4.as_deref(), Some("Claude-Web"));
     }
 
     #[test]
@@ -414,16 +645,16 @@ mod tests {
         // Old names
         let (cat1, tok1) = guard.classify("Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)");
         assert_eq!(cat1, BotCategory::AiScraper);
-        assert_eq!(tok1, Some("GPTBot"));
+        assert_eq!(tok1.as_deref(), Some("GPTBot"));
 
         let (cat2, tok2) = guard.classify("Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; ChatGPT-User/1.0; +https://openai.com/bot)");
         assert_eq!(cat2, BotCategory::AiScraper);
-        assert_eq!(tok2, Some("ChatGPT-User"));
+        assert_eq!(tok2.as_deref(), Some("ChatGPT-User"));
 
         // New search bot
         let (cat3, tok3) = guard.classify("Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; OAI-SearchBot/1.0; +https://openai.com/searchbot)");
         assert_eq!(cat3, BotCategory::AiScraper);
-        assert_eq!(tok3, Some("OAI-SearchBot"));
+        assert_eq!(tok3.as_deref(), Some("OAI-SearchBot"));
     }
 
     #[test]
@@ -433,12 +664,12 @@ mod tests {
         // BuiltWith (discovered in battlefield audit)
         let (cat1, tok1) = guard.classify("BuiltWith/1.4 (https://builtwith.com/bi)");
         assert_eq!(cat1, BotCategory::ReconScanner);
-        assert_eq!(tok1, Some("BuiltWith"));
+        assert_eq!(tok1.as_deref(), Some("BuiltWith"));
 
         // CensysInspect (discovered in battlefield audit)
         let (cat2, tok2) = guard.classify("CensysInspect/1.1 (+https://about.censys.io/)");
         assert_eq!(cat2, BotCategory::ReconScanner);
-        assert_eq!(tok2, Some("CensysInspect"));
+        assert_eq!(tok2.as_deref(), Some("CensysInspect"));
 
         // Semrush & Ahrefs
         let (cat3, _) = guard.classify("SemrushBot/7~bl");
@@ -449,18 +680,70 @@ mod tests {
     }
 
     #[test]
+    fn test_kali_and_offensive_security_tools() {
+        let guard = BotGuard::new();
+
+        // Fuzzers
+        let (c1, t1) = guard.classify("ffuf/v2.1.0-dev");
+        assert_eq!(c1, BotCategory::AutomationTool);
+        assert_eq!(t1.as_deref(), Some("ffuf"));
+
+        let (c2, t2) = guard.classify("nuclei - v3.1.0");
+        assert_eq!(c2, BotCategory::AutomationTool);
+        assert_eq!(t2.as_deref(), Some("Nuclei"));
+
+        let (c3, t3) = guard.classify("wfuzz/3.1.0");
+        assert_eq!(c3, BotCategory::AutomationTool);
+        assert_eq!(t3.as_deref(), Some("wfuzz"));
+
+        // Exploit frameworks
+        let (c4, t4) = guard.classify("metasploit-framework/v6.3");
+        assert_eq!(c4, BotCategory::AutomationTool);
+        assert_eq!(t4.as_deref(), Some("Metasploit"));
+
+        // Forensics suites automated
+        let (c5, t5) = guard.classify("EnCase Forensic/21.4");
+        assert_eq!(c5, BotCategory::AutomationTool);
+        assert_eq!(t5.as_deref(), Some("EnCase"));
+    }
+
+    #[test]
+    fn test_dynamic_self_healing_harvesting() {
+        let guard = BotGuard::new();
+
+        let strange_ua = "ZeroDayScannerX/9.9 (Hostile Threat Actor)";
+
+        // Before harvesting, it's unknown
+        let (before_cat, _) = guard.classify(strange_ua);
+        assert_eq!(before_cat, BotCategory::Unknown);
+
+        // Honeylink / Canary Trap is tripped!
+        let token = guard.harvest_canary_probe(Some(strange_ua), "Tripped canary honeylink", 1_700_000_000_000);
+        assert_eq!(token.as_deref(), Some("ZeroDayScannerX"));
+
+        // Immediately after, ANY request containing that token is classified and blocked!
+        let (after_cat, after_tok) = guard.classify(strange_ua);
+        assert_eq!(after_cat, BotCategory::AutomationTool);
+        assert_eq!(after_tok.as_deref(), Some("ZeroDayScannerX"));
+
+        // Edge perimeter drops it with 403 Forbidden!
+        let verdict = guard.evaluate_perimeter(Some(strange_ua), "/pricing");
+        assert!(verdict.is_blocked());
+    }
+
+    #[test]
     fn test_google_extended_vs_googlebot() {
         let guard = BotGuard::new();
 
         // Google-Extended (AI Training) must be classified as AiScraper
         let (cat1, tok1) = guard.classify("Mozilla/5.0 (compatible; Google-Extended; +https://developers.google.com/search/docs/crawling-indexing/google-extended)");
         assert_eq!(cat1, BotCategory::AiScraper);
-        assert_eq!(tok1, Some("Google-Extended"));
+        assert_eq!(tok1.as_deref(), Some("Google-Extended"));
 
         // Googlebot (Legitimate Search) must be permitted
         let (cat2, tok2) = guard.classify("Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)");
         assert_eq!(cat2, BotCategory::LegitimateSearch);
-        assert_eq!(tok2, Some("Googlebot"));
+        assert_eq!(tok2.as_deref(), Some("Googlebot"));
     }
 
     #[test]
