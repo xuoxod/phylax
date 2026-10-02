@@ -4,6 +4,16 @@ All notable changes, defense layer releases, and architectural milestones for **
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] - 2026-10-02 (Commercial Cloud, Datacenter & Mass-Scanner Threat Weighting)
+
+### 🌟 Added & Fortified
+* **Datacenter & Autonomous Scanner Threat Weighting (`src/subnet_guard.rs` & `src/threat_intel.rs`)**:
+  - Ingested authoritative CIDRs for mass vulnerability scanners and cloud hosting infrastructure (`DATACENTER_AND_SCANNER_CIDR_SEEDS`): Censys, Zgrab, Tencent Cloud crawlers, Choopa/Vultr scavengers, Shadowserver, and Rapid7.
+  - Introduced `IpRiskCategory`: granular classification of incoming traffic into `Residential`, `Datacenter { matched_cidr }`, or `TorExit { matched_cidr }`.
+  - Zero-Tolerance Perimeter Policy: Ingress originating from commercial cloud datacenters and mass-scanners is flagged with high-risk priority, triggering instant quarantine with zero retry leeway upon tripping any honeypot or anomalous path probe.
+* **Unit & Subnet TDD Expansion**:
+  - Added unit test `test_subnet_guard_evaluates_datacenter_and_residential_risk` verifying accurate classification across residential, Censys, Tencent Cloud, and Tor exit IP ranges.
+
 ## [0.2.3] - 2026-10-01 (Dynamic Self-Healing BotGuard, Penetration Testing Arsenal & Canary Traps)
 
 ### 🌟 Added & Fortified

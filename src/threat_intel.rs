@@ -33,6 +33,24 @@ pub const THREAT_INTEL_CIDR_SEEDS: &[&str] = &[
     "194.32.107.0/24",
 ];
 
+/// Known Datacenter, Commercial Cloud & Mass-Scanner CIDRs (Zero-Tolerance Perimeter Policy)
+pub const DATACENTER_AND_SCANNER_CIDR_SEEDS: &[&str] = &[
+    // Censys / Zgrab automated scanners (Captured live attack 2026-10-02)
+    "162.142.125.0/24",
+    "167.94.138.0/24",
+    "167.94.145.0/24",
+    "167.94.146.0/24",
+    "167.248.133.0/24",
+    // Tencent Cloud automated bot crawlers (Captured canary trap 2026-10-02: 43.130.102.7)
+    "43.130.0.0/16",
+    "43.154.0.0/16",
+    // Choopa / Constant / Vultr automated exploit scrapers (Captured live 2026-10-02: 213.209.159.0)
+    "213.209.159.0/24",
+    // Shadowserver / Rapid7 mass scanning fleets
+    "198.180.198.0/24",
+    "71.6.232.0/24",
+];
+
 /// Known Disposable / Throwaway Email Domains
 pub const DISPOSABLE_EMAIL_DOMAINS: &[&str] = &[
     "mailinator.com",

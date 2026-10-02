@@ -66,7 +66,7 @@ pub use session_sentinel::{
     GeoCoordinate, SessionCheckpoint, SessionSentinel, SessionSentinelConfig, SessionVerdict,
 };
 pub use stream_guard::{RouteCategory, StreamGuard, StreamGuardConfig, StreamVerdict};
-pub use subnet_guard::{SubnetGuard, SubnetVerdict};
+pub use subnet_guard::{IpRiskCategory, SubnetGuard, SubnetVerdict};
 pub use tarpit::{TarpitConfig, TarpitGovernor, TarpitSlotGuard, TarpitVerdict};
 pub use timing::{TimingGuard, TimingVerdict};
 pub use toll_guard::{TollGuard, TollGuardConfig, TollVerdict};
