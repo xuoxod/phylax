@@ -15,9 +15,11 @@
 //! 11. L7 Stream & Slowloris Protection Guard (`stream_guard`)
 //! 12. Zero-Lock In-Memory Cache Shield (`cache_shield`)
 //! 13. Autonomous Zero-Day & Emerging Threat Harvester (`threat_harvester`)
+//! 14. Sovereign Bot Guard & User-Agent Interception (`bot_guard`)
 
 pub mod adaptive_pow;
 pub mod autonomous_quarantine;
+pub mod bot_guard;
 pub mod cache_shield;
 pub mod credential_guard;
 pub mod decoy_uri;
@@ -42,6 +44,10 @@ pub mod abuse_reporting;
 
 pub use adaptive_pow::{AdaptivePowConfig, AdaptivePowEngine, InfractionSeverity};
 pub use autonomous_quarantine::{AutonomousQuarantine, QuarantineConfig};
+pub use bot_guard::{
+    BotCategory, BotGuard, BotVerdict, AI_SCRAPER_SIGNATURES, AUTOMATION_TOOL_SIGNATURES,
+    LEGITIMATE_SEARCH_SIGNATURES, RECON_SCANNER_SIGNATURES,
+};
 pub use cache_shield::{CacheShield, CacheShieldConfig, CacheVerdict, CachedResponse};
 pub use credential_guard::{BreachedPasswordBloomFilter, CredentialGuard, CredentialVerdict};
 pub use decoy_uri::{DecoyCategory, DecoyUriConfig, DecoyUriSentinel, DecoyUriVerdict};
