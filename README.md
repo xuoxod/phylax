@@ -442,6 +442,18 @@ When `abuse-reporting` is enabled, honeypot intrusions are asynchronously dispat
   Cooldown:        Sliding window active (Deduplicated for 900 seconds)
 ```
 
+### 7. Sovereign Bot Guard & User-Agent Interception (Layer 14)
+Zero-allocation sub-microsecond classification engine deflecting aggressive AI model scrapers, tech stack profilers, and headless automation tools:
+
+```text
+[PHYLAX BOT GUARD] Intercepted automated crawler:
+  Client IP:      96.227.137.21
+  Target Path:    /
+  User-Agent:     Claude-SearchBot/1.0
+  Classification: BotCategory::AiScraper (Claude-SearchBot)
+  Action:         Deflected with HTTP 403 Forbidden (RFC 9309 compliance)
+```
+
 ---
 
 ## Client-Side Script: `client/phylax.js`

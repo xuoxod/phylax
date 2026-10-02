@@ -4,6 +4,35 @@ All notable changes, defense layer releases, and architectural milestones for **
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-10-01 (Sovereign BotGuard, AI Harvester Interception & RFC 9309 Defense)
+
+### 🌟 Added & Enhanced
+* **Sovereign Bot Guard & User-Agent Classification Engine (`src/bot_guard.rs` - Layer 14)**:
+  - Sub-microsecond, zero-allocation User-Agent classification engine (`BotGuard`) executing in `<10ns`.
+  - Comprehensive canonical signature registry covering both legacy and newly rebranded search/web bots:
+    - **Anthropic**: `ClaudeBot`, `anthropic-ai`, `Claude-SearchBot`, `Claude-Web`
+    - **OpenAI**: `GPTBot`, `ChatGPT-User`, `OAI-SearchBot`
+    - **Google AI**: `Google-Extended` (isolated from legitimate search indexing)
+    - **Meta / Apple**: `Meta-ExternalAgent`, `Meta-ExternalFetcher`, `FacebookBot`, `facebookexternalhit`, `Applebot-Extended`
+    - **ByteDance / TikTok**: `Bytespider`, `TikTokBot`, `BytespiderBot`
+    - **Profilers & Scanners**: `BuiltWith`, `CensysInspect`, `Censys`, `Shodan`, `SemrushBot`, `AhrefsBot`, `DotBot`, `MJ12bot`
+    - **Automation & Exploit Tools**: `Scrapy`, `Go-http-client`, `python-requests`, `aiohttp`, `httpx`, `sqlmap`, `nmap`, `nikto`, `masscan`
+  - Invariant rules:
+    - `/robots.txt` bypass is permanently guaranteed so compliant crawlers discover their exclusions.
+    - Developer CLI routes (`/install/*`, `/bin/*`, `/checksums/*`, `/healthz`) permit `curl` & `wget`.
+    - Legitimate search engines (`Googlebot`, `Bingbot`, `DuckDuckBot`, `Slurp`, `Baiduspider`, `YandexBot`) are permitted on public storefronts.
+* **Adversarial Self-Attack TDD Suite (`tests/adversarial_bot_guard_tests.rs`)**:
+  - 7/7 comprehensive red-team test batteries passing in `<0.01s`:
+    - Full registry coverage asserting every old and new signature variant.
+    - Mixed-case mutations and whitespace padding evasion fuzzing (`cLaUdE-sEaRcHbOt`, `bUiLtWiTh`).
+    - Terminal ANSI escape code & CSI/OSC poisoning neutralization.
+    - Formula injection (`=cmd|...`) and code execution payload resistance.
+    - Null-byte boundary corruptions (`\0`).
+    - Header allocation bomb guardrail ($>4\text{KB}$ immediately flagged as buffer exhaustion attacks).
+    - Zero false-positive invariant asserting 100% pass-through for legitimate search engines and human browsers.
+
+---
+
 ## [0.2.1] - 2026-10-01 (Vendor-Agnostic Threat Intelligence, Dynamic Versioning & Sovereign Packaging)
 
 ### 🌟 Added & Enhanced
