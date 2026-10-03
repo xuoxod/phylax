@@ -147,9 +147,15 @@ fn test_adversarial_ipv6_subnet_rotation_spoof_defeated() {
     );
 
     let now = 3_000_000;
-    assert!(harvester.ingest_anomalous_uri(zero_day_path, bot_ip_1, now).is_none());
-    assert!(harvester.ingest_anomalous_uri(zero_day_path, bot_ip_2, now + 10).is_none());
-    assert!(harvester.ingest_anomalous_uri(zero_day_path, bot_ip_3, now + 20).is_none());
+    assert!(harvester
+        .ingest_anomalous_uri(zero_day_path, bot_ip_1, now)
+        .is_none());
+    assert!(harvester
+        .ingest_anomalous_uri(zero_day_path, bot_ip_2, now + 10)
+        .is_none());
+    assert!(harvester
+        .ingest_anomalous_uri(zero_day_path, bot_ip_3, now + 20)
+        .is_none());
 
     // Still only 1 subnet observed
     assert!(!sentinel.contains_trap(zero_day_path));
@@ -161,10 +167,15 @@ fn test_adversarial_ipv6_subnet_rotation_spoof_defeated() {
     let remote_ip_2: IpAddr = "2001:db8:beef:0001::5".parse().unwrap();
     let remote_ip_3: IpAddr = "2600:1f18:4567:0002::9".parse().unwrap();
 
-    assert!(harvester.ingest_anomalous_uri(zero_day_path, remote_ip_2, now + 30).is_none());
+    assert!(harvester
+        .ingest_anomalous_uri(zero_day_path, remote_ip_2, now + 30)
+        .is_none());
     let promotion = harvester.ingest_anomalous_uri(zero_day_path, remote_ip_3, now + 40);
 
-    assert!(promotion.is_some(), "3 distinct /48 IPv6 blocks must successfully promote path");
+    assert!(
+        promotion.is_some(),
+        "3 distinct /48 IPv6 blocks must successfully promote path"
+    );
     assert!(sentinel.contains_trap(zero_day_path));
 }
 
@@ -272,7 +283,10 @@ fn test_shield_pipeline_end_to_end_zero_day_harvesting_and_containment() {
 
     // Threat actor from subnet 2 probes the zero-day path -> Correlated!
     let promotion_2 = pipeline.record_anomalous_uri_str(zero_day_route, "203.0.113.88", now + 50);
-    assert!(promotion_2.is_some(), "2 distinct subnets must promote path");
+    assert!(
+        promotion_2.is_some(),
+        "2 distinct subnets must promote path"
+    );
 
     // From this moment on, ANY attacker from ANY IP hitting the promoted zero-day path is trapped at Layer 0.5!
     let attacker_req = ShieldRequest {
@@ -292,5 +306,7 @@ fn test_shield_pipeline_end_to_end_zero_day_harvesting_and_containment() {
     }
 
     // Attacker IP 45.33.32.1 was automatically quarantined and ratcheted in adaptive PoW!
-    assert!(pipeline.quarantine().is_quarantined("45.33.32.1", now + 100));
+    assert!(pipeline
+        .quarantine()
+        .is_quarantined("45.33.32.1", now + 100));
 }

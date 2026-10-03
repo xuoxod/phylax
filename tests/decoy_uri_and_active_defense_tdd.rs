@@ -27,49 +27,82 @@ fn test_decoy_uri_sentinel_pure_evaluation() {
     // 2. Trapped common vulnerability scanner targets
     assert!(matches!(
         sentinel.evaluate("/.env"),
-        DecoyUriVerdict::Trapped { category: DecoyCategory::EnvironmentSecret, .. }
+        DecoyUriVerdict::Trapped {
+            category: DecoyCategory::EnvironmentSecret,
+            ..
+        }
     ));
     assert!(matches!(
         sentinel.evaluate("/.azure/credentials"),
-        DecoyUriVerdict::Trapped { category: DecoyCategory::EnvironmentSecret, .. }
+        DecoyUriVerdict::Trapped {
+            category: DecoyCategory::EnvironmentSecret,
+            ..
+        }
     ));
     assert!(matches!(
         sentinel.evaluate("/app/terraform.tfstate"),
-        DecoyUriVerdict::Trapped { category: DecoyCategory::CloudInfrastructure, .. }
+        DecoyUriVerdict::Trapped {
+            category: DecoyCategory::CloudInfrastructure,
+            ..
+        }
     ));
     assert!(matches!(
         sentinel.evaluate("/wp-login.php"),
-        DecoyUriVerdict::Trapped { category: DecoyCategory::AdminCmsProbe, .. }
+        DecoyUriVerdict::Trapped {
+            category: DecoyCategory::AdminCmsProbe,
+            ..
+        }
     ));
     assert!(matches!(
         sentinel.evaluate("/.git/config"),
-        DecoyUriVerdict::Trapped { category: DecoyCategory::VersionControl, .. }
+        DecoyUriVerdict::Trapped {
+            category: DecoyCategory::VersionControl,
+            ..
+        }
     ));
     assert!(matches!(
         sentinel.evaluate("/backup.sql"),
-        DecoyUriVerdict::Trapped { category: DecoyCategory::DatabaseBackup, .. }
+        DecoyUriVerdict::Trapped {
+            category: DecoyCategory::DatabaseBackup,
+            ..
+        }
     ));
     assert!(matches!(
         sentinel.evaluate("/private.key"),
-        DecoyUriVerdict::Trapped { category: DecoyCategory::PrivateKey, .. }
+        DecoyUriVerdict::Trapped {
+            category: DecoyCategory::PrivateKey,
+            ..
+        }
     ));
 
     // 3. Generic PHP exploit scans against pure Rust backend
     assert!(matches!(
         sentinel.evaluate("/wp-configs.php"),
-        DecoyUriVerdict::Trapped { category: DecoyCategory::AdminCmsProbe, .. }
+        DecoyUriVerdict::Trapped {
+            category: DecoyCategory::AdminCmsProbe,
+            ..
+        }
     ));
     assert!(matches!(
         sentinel.evaluate("/update.php"),
-        DecoyUriVerdict::Trapped { category: DecoyCategory::AdminCmsProbe, .. }
+        DecoyUriVerdict::Trapped {
+            category: DecoyCategory::AdminCmsProbe,
+            ..
+        }
     ));
     assert!(matches!(
         sentinel.evaluate("/2.php"),
-        DecoyUriVerdict::Trapped { category: DecoyCategory::AdminCmsProbe, .. }
+        DecoyUriVerdict::Trapped {
+            category: DecoyCategory::AdminCmsProbe,
+            ..
+        }
     ));
     assert!(matches!(
         sentinel.evaluate("/shell.phtml"),
-        DecoyUriVerdict::Trapped { category: DecoyCategory::AdminCmsProbe, .. }
+        DecoyUriVerdict::Trapped {
+            category: DecoyCategory::AdminCmsProbe,
+            ..
+        }
     ));
 }
 
@@ -158,7 +191,10 @@ fn test_decoy_uri_trap_populates_quarantine_and_adaptive_pow() {
     };
 
     let verdict = pipeline.evaluate_perimeter(&probe);
-    assert!(matches!(verdict, ShieldVerdict::Deny(DenialReason::DecoyUriTrapped { .. })));
+    assert!(matches!(
+        verdict,
+        ShieldVerdict::Deny(DenialReason::DecoyUriTrapped { .. })
+    ));
 
     // Verify adaptive PoW difficulty was ratcheted for repeat scanner
     assert_eq!(pipeline.adaptive_pow().tracked_ips_count(), 1);
@@ -204,7 +240,10 @@ async fn test_decoy_uri_trap_triggers_asynchronous_abuse_reporting() {
     };
 
     let verdict = pipeline.evaluate_perimeter(&probe);
-    assert!(matches!(verdict, ShieldVerdict::Deny(DenialReason::DecoyUriTrapped { .. })));
+    assert!(matches!(
+        verdict,
+        ShieldVerdict::Deny(DenialReason::DecoyUriTrapped { .. })
+    ));
 
     // Allow async background dispatch task to execute
     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -219,7 +258,11 @@ async fn test_decoy_uri_trap_triggers_asynchronous_abuse_reporting() {
     // Duplicate probe within cooldown must be suppressed
     let _ = pipeline.evaluate_perimeter(&probe);
     tokio::time::sleep(Duration::from_millis(50)).await;
-    assert_eq!(mock_transport.get_recorded_reports().len(), 1, "Duplicate report must be suppressed by cooldown");
+    assert_eq!(
+        mock_transport.get_recorded_reports().len(),
+        1,
+        "Duplicate report must be suppressed by cooldown"
+    );
 }
 
 #[test]
@@ -230,9 +273,7 @@ fn test_decoy_uri_custom_builder_configuration() {
         custom_prefix_routes: vec![("/hidden-api/".to_string(), DecoyCategory::Custom)],
     };
 
-    let pipeline = ShieldPipeline::builder()
-        .with_decoy_uris(config)
-        .build();
+    let pipeline = ShieldPipeline::builder().with_decoy_uris(config).build();
 
     let custom_probe = ShieldRequest {
         client_ip: "10.0.0.1",
@@ -259,47 +300,73 @@ fn test_adversarial_path_evasion_and_normalization() {
     // 1. Multi-slash bypass: "//.env", "///.env"
     assert!(matches!(
         sentinel.evaluate("//.env"),
-        DecoyUriVerdict::Trapped { category: DecoyCategory::EnvironmentSecret, .. }
+        DecoyUriVerdict::Trapped {
+            category: DecoyCategory::EnvironmentSecret,
+            ..
+        }
     ));
     assert!(matches!(
         sentinel.evaluate("///.env"),
-        DecoyUriVerdict::Trapped { category: DecoyCategory::EnvironmentSecret, .. }
+        DecoyUriVerdict::Trapped {
+            category: DecoyCategory::EnvironmentSecret,
+            ..
+        }
     ));
 
     // 2. Hex/Percent-encoding evasion: "/%2e%65%6e%76" -> "/.env"
     assert!(matches!(
         sentinel.evaluate("/%2e%65%6e%76"),
-        DecoyUriVerdict::Trapped { category: DecoyCategory::EnvironmentSecret, .. }
+        DecoyUriVerdict::Trapped {
+            category: DecoyCategory::EnvironmentSecret,
+            ..
+        }
     ));
     assert!(matches!(
         sentinel.evaluate("/%2eenv"),
-        DecoyUriVerdict::Trapped { category: DecoyCategory::EnvironmentSecret, .. }
+        DecoyUriVerdict::Trapped {
+            category: DecoyCategory::EnvironmentSecret,
+            ..
+        }
     ));
 
     // 3. Dot-segment evasion: "/./.env", "/foo/../.env"
     assert!(matches!(
         sentinel.evaluate("/./.env"),
-        DecoyUriVerdict::Trapped { category: DecoyCategory::EnvironmentSecret, .. }
+        DecoyUriVerdict::Trapped {
+            category: DecoyCategory::EnvironmentSecret,
+            ..
+        }
     ));
     assert!(matches!(
         sentinel.evaluate("/foo/../.env"),
-        DecoyUriVerdict::Trapped { category: DecoyCategory::EnvironmentSecret, .. }
+        DecoyUriVerdict::Trapped {
+            category: DecoyCategory::EnvironmentSecret,
+            ..
+        }
     ));
 
     // 4. Trailing slash and query evasion: "/.env/", "/.env?test=1", "/.env#section"
     assert!(matches!(
         sentinel.evaluate("/.env/"),
-        DecoyUriVerdict::Trapped { category: DecoyCategory::EnvironmentSecret, .. }
+        DecoyUriVerdict::Trapped {
+            category: DecoyCategory::EnvironmentSecret,
+            ..
+        }
     ));
     assert!(matches!(
         sentinel.evaluate("/.env?test=1"),
-        DecoyUriVerdict::Trapped { category: DecoyCategory::EnvironmentSecret, .. }
+        DecoyUriVerdict::Trapped {
+            category: DecoyCategory::EnvironmentSecret,
+            ..
+        }
     ));
 
     // 5. Mixed evasions: "//foo/./../%2eenv?token=leak"
     assert!(matches!(
         sentinel.evaluate("//foo/./../%2eenv?token=leak"),
-        DecoyUriVerdict::Trapped { category: DecoyCategory::EnvironmentSecret, .. }
+        DecoyUriVerdict::Trapped {
+            category: DecoyCategory::EnvironmentSecret,
+            ..
+        }
     ));
 }
-

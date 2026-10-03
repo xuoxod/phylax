@@ -45,9 +45,8 @@ pub mod abuse_reporting;
 pub use adaptive_pow::{AdaptivePowConfig, AdaptivePowEngine, InfractionSeverity};
 pub use autonomous_quarantine::{AutonomousQuarantine, QuarantineConfig};
 pub use bot_guard::{
-    BotCategory, BotGuard, BotVerdict, DynamicBotRecord, DynamicBotRegistry,
-    AI_SCRAPER_SIGNATURES, AUTOMATION_TOOL_SIGNATURES, LEGITIMATE_SEARCH_SIGNATURES,
-    RECON_SCANNER_SIGNATURES,
+    BotCategory, BotGuard, BotVerdict, DynamicBotRecord, DynamicBotRegistry, AI_SCRAPER_SIGNATURES,
+    AUTOMATION_TOOL_SIGNATURES, LEGITIMATE_SEARCH_SIGNATURES, RECON_SCANNER_SIGNATURES,
 };
 pub use cache_shield::{CacheShield, CacheShieldConfig, CacheVerdict, CachedResponse};
 pub use credential_guard::{BreachedPasswordBloomFilter, CredentialGuard, CredentialVerdict};
@@ -68,12 +67,12 @@ pub use session_sentinel::{
 pub use stream_guard::{RouteCategory, StreamGuard, StreamGuardConfig, StreamVerdict};
 pub use subnet_guard::{IpRiskCategory, SubnetGuard, SubnetVerdict};
 pub use tarpit::{TarpitConfig, TarpitGovernor, TarpitSlotGuard, TarpitVerdict};
-pub use timing::{TimingGuard, TimingVerdict};
-pub use toll_guard::{TollGuard, TollGuardConfig, TollVerdict};
-pub use turn_guard::{TurnCredentials, TurnGuard, TurnGuardConfig, TurnVerdict};
 pub use threat_harvester::{
     CandidatePathRecord, PromotionVerdict, SubnetKey, ThreatHarvesterConfig, ThreatHarvesterEngine,
 };
+pub use timing::{TimingGuard, TimingVerdict};
+pub use toll_guard::{TollGuard, TollGuardConfig, TollVerdict};
+pub use turn_guard::{TurnCredentials, TurnGuard, TurnGuardConfig, TurnVerdict};
 
 #[cfg(feature = "abuse-reporting")]
 pub use abuse_reporting::{

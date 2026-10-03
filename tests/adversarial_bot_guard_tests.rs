@@ -29,7 +29,11 @@ fn test_adversarial_full_old_and_new_name_registry() {
             needle,
             display_name
         );
-        assert!(matched.is_some(), "Matched token should be present for: {}", needle);
+        assert!(
+            matched.is_some(),
+            "Matched token should be present for: {}",
+            needle
+        );
     }
 
     // Verify all registered Recon signatures trigger BotCategory::ReconScanner
@@ -43,7 +47,11 @@ fn test_adversarial_full_old_and_new_name_registry() {
             needle,
             display_name
         );
-        assert!(matched.is_some(), "Matched token should be present for: {}", needle);
+        assert!(
+            matched.is_some(),
+            "Matched token should be present for: {}",
+            needle
+        );
     }
 
     // Verify all registered Automation signatures trigger BotCategory::AutomationTool
@@ -57,12 +65,19 @@ fn test_adversarial_full_old_and_new_name_registry() {
             needle,
             display_name
         );
-        assert!(matched.is_some(), "Matched token should be present for: {}", needle);
+        assert!(
+            matched.is_some(),
+            "Matched token should be present for: {}",
+            needle
+        );
     }
 
     // Verify all registered Search engines trigger BotCategory::LegitimateSearch
     for &(needle, display_name) in LEGITIMATE_SEARCH_SIGNATURES {
-        let ua = format!("Mozilla/5.0 (compatible; {}; +http://search.engine/bot.html)", needle);
+        let ua = format!(
+            "Mozilla/5.0 (compatible; {}; +http://search.engine/bot.html)",
+            needle
+        );
         let (cat, _) = guard.classify(&ua);
         assert_eq!(
             cat,
@@ -318,7 +333,10 @@ fn test_adversarial_dynamic_self_healing_honeylink_harvesting() {
 
     // Protected browser tokens are immune to malicious poisoning
     let browser_spoof = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/129.0.0.0 Safari/537.36";
-    let poisoned = guard.harvest_canary_probe(Some(browser_spoof), "Attempted poison", 1_700_000_000_000);
-    assert!(poisoned.is_none(), "Protected browser tokens must never be harvested");
+    let poisoned =
+        guard.harvest_canary_probe(Some(browser_spoof), "Attempted poison", 1_700_000_000_000);
+    assert!(
+        poisoned.is_none(),
+        "Protected browser tokens must never be harvested"
+    );
 }
-

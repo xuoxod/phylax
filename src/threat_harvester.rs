@@ -242,7 +242,8 @@ impl ThreatHarvesterEngine {
                 let first_seen_ms = record.first_seen_ms;
 
                 // Elevate into active decoy traps in sub-microsecond time
-                self.sentinel.add_exact_trap_with_category(&normalized, category);
+                self.sentinel
+                    .add_exact_trap_with_category(&normalized, category);
 
                 return Some(PromotionVerdict {
                     path: normalized,
@@ -306,7 +307,8 @@ impl ThreatHarvesterEngine {
             candidates.insert(normalized.clone(), record);
 
             if qualifies_immediately {
-                self.sentinel.add_exact_trap_with_category(&normalized, category);
+                self.sentinel
+                    .add_exact_trap_with_category(&normalized, category);
                 Some(PromotionVerdict {
                     path: normalized,
                     category,
@@ -337,7 +339,8 @@ impl ThreatHarvesterEngine {
         for path in paths {
             let normalized = DecoyUriSentinel::normalize_path(path);
             if !normalized.is_empty() && normalized != "/" {
-                self.sentinel.add_exact_trap_with_category(&normalized, category);
+                self.sentinel
+                    .add_exact_trap_with_category(&normalized, category);
                 count += 1;
             }
         }
@@ -351,7 +354,8 @@ impl ThreatHarvesterEngine {
         for (path, category) in catalog {
             let normalized = DecoyUriSentinel::normalize_path(path);
             if !normalized.is_empty() && normalized != "/" {
-                self.sentinel.add_exact_trap_with_category(&normalized, *category);
+                self.sentinel
+                    .add_exact_trap_with_category(&normalized, *category);
                 activated += 1;
             }
         }
@@ -362,7 +366,12 @@ impl ThreatHarvesterEngine {
     pub fn prune_expired(&self, now_ms: u64) -> usize {
         let mut candidates = self.candidates.write();
         let mut subnet_counts = self.subnet_path_counts.write();
-        Self::prune_internal(&mut candidates, &mut subnet_counts, now_ms, self.config.window_duration_ms)
+        Self::prune_internal(
+            &mut candidates,
+            &mut subnet_counts,
+            now_ms,
+            self.config.window_duration_ms,
+        )
     }
 
     fn prune_internal(
@@ -522,11 +531,15 @@ mod tests {
         assert!(!sentinel.contains_trap(zero_day_path));
 
         // Request 1 from Subnet 1
-        assert!(harvester.ingest_anomalous_uri(zero_day_path, ip_subnet_1, now).is_none());
+        assert!(harvester
+            .ingest_anomalous_uri(zero_day_path, ip_subnet_1, now)
+            .is_none());
         assert!(!sentinel.contains_trap(zero_day_path));
 
         // Request 2 from Subnet 2
-        assert!(harvester.ingest_anomalous_uri(zero_day_path, ip_subnet_2, now + 10).is_none());
+        assert!(harvester
+            .ingest_anomalous_uri(zero_day_path, ip_subnet_2, now + 10)
+            .is_none());
         assert!(!sentinel.contains_trap(zero_day_path));
 
         // Request 3 from Subnet 3 -> Correlated across 3 distinct subnets!
@@ -554,11 +567,15 @@ mod tests {
     #[test]
     fn test_bulk_cve_catalog_ingestion() {
         let sentinel = DecoyUriSentinel::default();
-        let harvester = ThreatHarvesterEngine::new(ThreatHarvesterConfig::default(), sentinel.clone());
+        let harvester =
+            ThreatHarvesterEngine::new(ThreatHarvesterConfig::default(), sentinel.clone());
 
         let cve_catalog = [
             ("/ssl-vpn/hipreport.esp", DecoyCategory::Custom), // CVE-2024-3400
-            ("/api/v1/totp/user-backup-code", DecoyCategory::AdminCmsProbe), // CVE-2023-46805
+            (
+                "/api/v1/totp/user-backup-code",
+                DecoyCategory::AdminCmsProbe,
+            ), // CVE-2023-46805
         ];
 
         let count = harvester.ingest_bulk_cve_catalog(&cve_catalog);
@@ -586,8 +603,14 @@ mod tests {
         assert_eq!(harvester.candidate_count(), 3);
 
         // 4th distinct path from the SAME subnet is quota-capped and rejected
-        assert!(harvester.ingest_anomalous_uri("/path4_overflow", ip, now).is_none());
-        assert_eq!(harvester.candidate_count(), 3, "Subnet quota must block memory pollution");
+        assert!(harvester
+            .ingest_anomalous_uri("/path4_overflow", ip, now)
+            .is_none());
+        assert_eq!(
+            harvester.candidate_count(),
+            3,
+            "Subnet quota must block memory pollution"
+        );
         assert!(!harvester.is_candidate("/path4_overflow"));
     }
 }

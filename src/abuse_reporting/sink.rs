@@ -61,7 +61,10 @@ impl IncidentSink for AbuseIpDbSink {
             comment,
         };
 
-        let resp = self.transport.submit_report(&payload, &self.api_key).await?;
+        let resp = self
+            .transport
+            .submit_report(&payload, &self.api_key)
+            .await?;
         Ok(SinkReceipt {
             sink_name: "AbuseIPDB",
             target_identifier: resp.ip_address,
@@ -97,7 +100,9 @@ impl IncidentSink for GenericWebhookSink {
     }
 
     async fn dispatch(&self, dossier: &ForensicDossier) -> Result<SinkReceipt, AbuseReportError> {
-        let mut req = self.client.post(&self.url)
+        let mut req = self
+            .client
+            .post(&self.url)
             .header("Content-Type", "application/json")
             .header("User-Agent", "Phylax-Sovereign-Defense/0.1.0");
 
@@ -105,7 +110,8 @@ impl IncidentSink for GenericWebhookSink {
             req = req.header(k, v);
         }
 
-        let resp = req.json(dossier)
+        let resp = req
+            .json(dossier)
             .send()
             .await
             .map_err(|e| AbuseReportError::Network(e.to_string()))?;
@@ -118,15 +124,24 @@ impl IncidentSink for GenericWebhookSink {
                 detail: format!("HTTP {}", status.as_u16()),
             })
         } else if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-            let retry = resp.headers().get("Retry-After")
+            let retry = resp
+                .headers()
+                .get("Retry-After")
                 .and_then(|v| v.to_str().ok())
                 .and_then(|s| s.parse::<u64>().ok());
-            Err(AbuseReportError::RateLimited { retry_after_s: retry })
-        } else if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+            Err(AbuseReportError::RateLimited {
+                retry_after_s: retry,
+            })
+        } else if status == reqwest::StatusCode::UNAUTHORIZED
+            || status == reqwest::StatusCode::FORBIDDEN
+        {
             Err(AbuseReportError::Unauthorized)
         } else {
             let body = resp.text().await.unwrap_or_default();
-            Err(AbuseReportError::ApiError { status: status.as_u16(), body })
+            Err(AbuseReportError::ApiError {
+                status: status.as_u16(),
+                body,
+            })
         }
     }
 }
@@ -178,7 +193,9 @@ impl IncidentSink for MultiSink {
 
     async fn dispatch(&self, dossier: &ForensicDossier) -> Result<SinkReceipt, AbuseReportError> {
         if self.sinks.is_empty() {
-            return Err(AbuseReportError::Config("MultiSink has no registered sinks".to_string()));
+            return Err(AbuseReportError::Config(
+                "MultiSink has no registered sinks".to_string(),
+            ));
         }
 
         let mut errors = Vec::new();
@@ -188,7 +205,11 @@ impl IncidentSink for MultiSink {
             match sink.dispatch(dossier).await {
                 Ok(receipt) => successes.push(format!("{}: {}", receipt.sink_name, receipt.detail)),
                 Err(e) => {
-                    tracing::warn!("⚠️ [INFORMANT-MULTISINK] Sink '{}' failed: {}", sink.name(), e);
+                    tracing::warn!(
+                        "⚠️ [INFORMANT-MULTISINK] Sink '{}' failed: {}",
+                        sink.name(),
+                        e
+                    );
                     errors.push(format!("{}: {}", sink.name(), e));
                 }
             }

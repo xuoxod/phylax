@@ -121,8 +121,14 @@ impl DecoyUriSentinel {
             // CMS & Admin Panels
             ("/wp-login.php", DecoyCategory::AdminCmsProbe),
             ("/xmlrpc.php", DecoyCategory::AdminCmsProbe),
-            ("/sites/default/settings.php.old", DecoyCategory::AdminCmsProbe),
-            ("/bitrix/modules/updater_partner.log", DecoyCategory::AdminCmsProbe),
+            (
+                "/sites/default/settings.php.old",
+                DecoyCategory::AdminCmsProbe,
+            ),
+            (
+                "/bitrix/modules/updater_partner.log",
+                DecoyCategory::AdminCmsProbe,
+            ),
             // Private Keys & Certificates
             ("/private.key", DecoyCategory::PrivateKey),
             ("/id_rsa", DecoyCategory::PrivateKey),
@@ -195,7 +201,11 @@ impl DecoyUriSentinel {
     pub fn contains_trap(&self, raw_path: &str) -> bool {
         let normalized = Self::normalize_path(raw_path);
         self.exact_traps.read().contains_key(&normalized)
-            || self.prefix_traps.read().iter().any(|(p, _)| normalized.starts_with(p))
+            || self
+                .prefix_traps
+                .read()
+                .iter()
+                .any(|(p, _)| normalized.starts_with(p))
     }
 
     /// Total count of registered active traps
@@ -333,7 +343,11 @@ impl DecoyUriSentinel {
                         category: DecoyCategory::AdminCmsProbe,
                     };
                 }
-                if (ext == ".sql" || ext == ".dump" || ext == ".bak" || ext == ".old" || ext == ".swp")
+                if (ext == ".sql"
+                    || ext == ".dump"
+                    || ext == ".bak"
+                    || ext == ".old"
+                    || ext == ".swp")
                     && (path.contains("db")
                         || path.contains("data")
                         || path.contains("backup")
@@ -554,23 +568,25 @@ mod tests {
     fn test_custom_decoy_routes() {
         let config = DecoyUriConfig {
             enabled: true,
-            custom_exact_routes: vec![
-                ("/my-hidden-debug".to_string(), DecoyCategory::Custom),
-            ],
-            custom_prefix_routes: vec![
-                ("/internal-admin/".to_string(), DecoyCategory::Custom),
-            ],
+            custom_exact_routes: vec![("/my-hidden-debug".to_string(), DecoyCategory::Custom)],
+            custom_prefix_routes: vec![("/internal-admin/".to_string(), DecoyCategory::Custom)],
         };
         let sentinel = DecoyUriSentinel::new(config);
 
         assert!(matches!(
             sentinel.evaluate("/my-hidden-debug"),
-            DecoyUriVerdict::Trapped { category: DecoyCategory::Custom, .. }
+            DecoyUriVerdict::Trapped {
+                category: DecoyCategory::Custom,
+                ..
+            }
         ));
 
         assert!(matches!(
             sentinel.evaluate("/internal-admin/dashboard"),
-            DecoyUriVerdict::Trapped { category: DecoyCategory::Custom, .. }
+            DecoyUriVerdict::Trapped {
+                category: DecoyCategory::Custom,
+                ..
+            }
         ));
     }
 
@@ -586,6 +602,10 @@ mod tests {
         let elapsed = start.elapsed();
         let avg_ns = elapsed.as_nanos() / 10_000;
         // In unoptimized debug test profile, ensure it executes well within microsecond bounds (<5µs)
-        assert!(avg_ns < 5000, "Average evaluation should be < 5000ns in debug build (was {}ns)", avg_ns);
+        assert!(
+            avg_ns < 5000,
+            "Average evaluation should be < 5000ns in debug build (was {}ns)",
+            avg_ns
+        );
     }
 }

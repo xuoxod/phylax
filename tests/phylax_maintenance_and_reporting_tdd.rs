@@ -226,7 +226,10 @@ async fn test_abuseipdb_sink_translates_and_dispatches() {
         evidence_notes: "Trapped decoy field".to_string(),
     };
 
-    let receipt = sink.dispatch(&dossier).await.expect("AbuseIpDbSink should succeed");
+    let receipt = sink
+        .dispatch(&dossier)
+        .await
+        .expect("AbuseIpDbSink should succeed");
     assert_eq!(receipt.sink_name, "AbuseIPDB");
     assert_eq!(mock_transport.get_recorded_reports().len(), 1);
     assert_eq!(mock_transport.get_recorded_reports()[0].ip, "198.51.100.77");
@@ -254,7 +257,10 @@ async fn test_informant_engine_with_custom_pluggable_sink() {
     };
 
     let verdict = engine.process_incident(&dossier).await;
-    assert!(matches!(verdict, phylax::abuse_reporting::InformantVerdict::Reported { .. }));
+    assert!(matches!(
+        verdict,
+        phylax::abuse_reporting::InformantVerdict::Reported { .. }
+    ));
     assert_eq!(mock_sink.recorded_dossiers().len(), 1);
     assert_eq!(mock_sink.recorded_dossiers()[0].client_ip, "192.0.2.1");
 }
@@ -273,9 +279,14 @@ async fn test_syslog_cef_sink_formats_standard_cef_payload() {
         trapped_field: Some("company_fax".to_string()),
         evidence_notes: "Decoy field accessed".to_string(),
     };
-    let receipt = sink.dispatch(&dossier).await.expect("CEF format should succeed");
+    let receipt = sink
+        .dispatch(&dossier)
+        .await
+        .expect("CEF format should succeed");
     assert_eq!(receipt.sink_name, "SyslogCEF");
-    assert!(receipt.detail.starts_with("CEF:0|Phylax|EdgeDefense|0.1.0|Web Honeypot Trap|Web Honeypot Trap|8|src=203.0.113.55"));
+    assert!(receipt.detail.starts_with(
+        "CEF:0|Phylax|EdgeDefense|0.1.0|Web Honeypot Trap|Web Honeypot Trap|8|src=203.0.113.55"
+    ));
     assert!(receipt.detail.contains("requestMethod=GET"));
     assert!(receipt.detail.contains("request=/admin"));
     assert!(receipt.detail.contains("cs1=company_fax"));
@@ -320,7 +331,10 @@ async fn test_multi_sink_broadcasts_to_multiple_sinks_and_handles_partial_failur
         evidence_notes: "Decoy field tripped".to_string(),
     };
 
-    let receipt = multi.dispatch(&dossier).await.expect("MultiSink should succeed if at least one sink succeeds");
+    let receipt = multi
+        .dispatch(&dossier)
+        .await
+        .expect("MultiSink should succeed if at least one sink succeeds");
     assert_eq!(receipt.sink_name, "MultiSink");
     assert_eq!(mock_sink1.recorded_dossiers().len(), 1);
     assert_eq!(mock_sink2.recorded_dossiers().len(), 1);
@@ -339,7 +353,7 @@ async fn test_multi_sink_broadcasts_to_multiple_sinks_and_handles_partial_failur
 #[cfg(feature = "abuse-reporting")]
 #[tokio::test]
 async fn test_generic_webhook_sink_dispatches_json_payload_to_http_endpoint() {
-    use axum::{routing::post, Router, Json, http::HeaderMap};
+    use axum::{http::HeaderMap, routing::post, Json, Router};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     let received_count = Arc::new(AtomicUsize::new(0));
@@ -347,19 +361,22 @@ async fn test_generic_webhook_sink_dispatches_json_payload_to_http_endpoint() {
 
     let app = Router::new().route(
         "/webhook",
-        post(move |headers: HeaderMap, Json(payload): Json<serde_json::Value>| {
-            let count = received_count_clone.clone();
-            async move {
-                if let Some(auth) = headers.get("authorization") {
-                    if auth == "Bearer test-token-123"
-                        && payload.get("client_ip").and_then(|v| v.as_str()) == Some("198.51.100.99")
-                    {
-                        count.fetch_add(1, Ordering::SeqCst);
+        post(
+            move |headers: HeaderMap, Json(payload): Json<serde_json::Value>| {
+                let count = received_count_clone.clone();
+                async move {
+                    if let Some(auth) = headers.get("authorization") {
+                        if auth == "Bearer test-token-123"
+                            && payload.get("client_ip").and_then(|v| v.as_str())
+                                == Some("198.51.100.99")
+                        {
+                            count.fetch_add(1, Ordering::SeqCst);
+                        }
                     }
+                    axum::http::StatusCode::OK
                 }
-                axum::http::StatusCode::OK
-            }
-        }),
+            },
+        ),
     );
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -372,7 +389,10 @@ async fn test_generic_webhook_sink_dispatches_json_payload_to_http_endpoint() {
     let webhook_url = format!("http://{}/webhook", addr);
     let sink = GenericWebhookSink::new(
         webhook_url,
-        vec![("Authorization".to_string(), "Bearer test-token-123".to_string())],
+        vec![(
+            "Authorization".to_string(),
+            "Bearer test-token-123".to_string(),
+        )],
     );
 
     let dossier = ForensicDossier {
@@ -386,9 +406,11 @@ async fn test_generic_webhook_sink_dispatches_json_payload_to_http_endpoint() {
         evidence_notes: "Trapped field during registration".to_string(),
     };
 
-    let receipt = sink.dispatch(&dossier).await.expect("Webhook dispatch should succeed");
+    let receipt = sink
+        .dispatch(&dossier)
+        .await
+        .expect("Webhook dispatch should succeed");
     assert_eq!(receipt.sink_name, "GenericWebhook");
     assert_eq!(receipt.detail, "HTTP 200");
     assert_eq!(received_count.load(Ordering::SeqCst), 1);
 }
-

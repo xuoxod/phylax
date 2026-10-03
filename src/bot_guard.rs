@@ -145,7 +145,10 @@ pub const AI_SCRAPER_SIGNATURES: &[(&str, &str)] = &[
     // Amazon AI
     ("amazonbot", "Amazonbot"),
     // Cohere AI
-    ("cohere-training-data-crawler", "cohere-training-data-crawler"),
+    (
+        "cohere-training-data-crawler",
+        "cohere-training-data-crawler",
+    ),
     ("cohere-ai", "cohere-ai"),
     // Common Crawl & Open Training Datasets
     ("omgilibot", "Omgilibot"),
@@ -380,10 +383,7 @@ impl DynamicBotRegistry {
 
     /// Extract a distinctive signature token from raw User-Agent
     fn extract_signature_token(ua: &str) -> Option<String> {
-        let first_part = ua
-            .split(|c: char| c == '/' || c == ' ' || c == ';' || c == '(')
-            .next()?
-            .trim();
+        let first_part = ua.split(['/', ' ', ';', '(']).next()?.trim();
         if first_part.len() < 3 {
             return None;
         }
@@ -465,14 +465,13 @@ impl BotGuard {
         let max_start = haystack_bytes.len() - needle_len;
 
         for i in 0..=max_start {
-            if haystack_bytes[i].to_ascii_lowercase() == first {
-                if haystack_bytes[i..i + needle_len]
+            if haystack_bytes[i].to_ascii_lowercase() == first
+                && haystack_bytes[i..i + needle_len]
                     .iter()
                     .zip(needle_lower.iter())
                     .all(|(h, n)| h.to_ascii_lowercase() == *n)
-                {
-                    return true;
-                }
+            {
+                return true;
             }
         }
         false
@@ -512,7 +511,10 @@ impl BotGuard {
         // 3. Check Automation Tools & Vulnerability Scanners (Static Signatures)
         for &(needle, display_name) in AUTOMATION_TOOL_SIGNATURES {
             if Self::contains_ignore_case(bytes, needle.as_bytes()) {
-                return (BotCategory::AutomationTool, Some(Cow::Borrowed(display_name)));
+                return (
+                    BotCategory::AutomationTool,
+                    Some(Cow::Borrowed(display_name)),
+                );
             }
         }
 
@@ -533,13 +535,19 @@ impl BotGuard {
         // 6. Check Legitimate Public Search Engines
         for &(needle, display_name) in LEGITIMATE_SEARCH_SIGNATURES {
             if Self::contains_ignore_case(bytes, needle.as_bytes()) {
-                return (BotCategory::LegitimateSearch, Some(Cow::Borrowed(display_name)));
+                return (
+                    BotCategory::LegitimateSearch,
+                    Some(Cow::Borrowed(display_name)),
+                );
             }
         }
 
         // 7. Generic Python script check
         if Self::contains_ignore_case(bytes, b"python") {
-            return (BotCategory::AutomationTool, Some(Cow::Borrowed("Python-Script")));
+            return (
+                BotCategory::AutomationTool,
+                Some(Cow::Borrowed("Python-Script")),
+            );
         }
 
         // 8. Check Standard Interactive Human Web Browsers
@@ -557,11 +565,7 @@ impl BotGuard {
     /// 2. Developer CLI routes (`/install/*`, `/bin/*`, `/checksums/*`, `/healthz`) permit `curl` & `wget`.
     /// 3. Hostile/unwanted AI scrapers, profilers, and automation tools are blocked with `BotVerdict::Blocked`.
     /// 4. Legitimate search engines and human browsers are permitted.
-    pub fn evaluate_perimeter(
-        &self,
-        user_agent: Option<&str>,
-        path: &str,
-    ) -> BotVerdict {
+    pub fn evaluate_perimeter(&self, user_agent: Option<&str>, path: &str) -> BotVerdict {
         // Invariant 0: Robots Exclusion discovery must never be barred
         if path == "/robots.txt" {
             return BotVerdict::Allowed {
@@ -583,8 +587,8 @@ impl BotGuard {
         let (category, matched_token) = self.classify(ua);
 
         // Invariant 1: Developer CLI utility passthrough for official installer endpoints
-        if category == BotCategory::CliUtility {
-            if path.starts_with("/install/")
+        if category == BotCategory::CliUtility
+            && (path.starts_with("/install/")
                 || path.starts_with("/bin/")
                 || path.starts_with("/checksums/")
                 || path == "/healthz"
@@ -592,10 +596,9 @@ impl BotGuard {
                 || path == "/security.txt"
                 || path.starts_with("/.well-known/")
                 || path == "/SOVEREIGN_RELEASE_KEY.asc"
-                || path == "/"
-            {
-                return BotVerdict::Allowed { category };
-            }
+                || path == "/")
+        {
+            return BotVerdict::Allowed { category };
         }
 
         // Invariant 2: Hostile / Unwanted Bots blocked with prejudice
@@ -675,7 +678,8 @@ mod tests {
         let (cat3, _) = guard.classify("SemrushBot/7~bl");
         assert_eq!(cat3, BotCategory::ReconScanner);
 
-        let (cat4, _) = guard.classify("Mozilla/5.0 (compatible; AhrefsBot/7.0; +http://ahrefs.com/robot/)");
+        let (cat4, _) =
+            guard.classify("Mozilla/5.0 (compatible; AhrefsBot/7.0; +http://ahrefs.com/robot/)");
         assert_eq!(cat4, BotCategory::ReconScanner);
     }
 
@@ -718,7 +722,11 @@ mod tests {
         assert_eq!(before_cat, BotCategory::Unknown);
 
         // Honeylink / Canary Trap is tripped!
-        let token = guard.harvest_canary_probe(Some(strange_ua), "Tripped canary honeylink", 1_700_000_000_000);
+        let token = guard.harvest_canary_probe(
+            Some(strange_ua),
+            "Tripped canary honeylink",
+            1_700_000_000_000,
+        );
         assert_eq!(token.as_deref(), Some("ZeroDayScannerX"));
 
         // Immediately after, ANY request containing that token is classified and blocked!
@@ -741,7 +749,8 @@ mod tests {
         assert_eq!(tok1.as_deref(), Some("Google-Extended"));
 
         // Googlebot (Legitimate Search) must be permitted
-        let (cat2, tok2) = guard.classify("Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)");
+        let (cat2, tok2) = guard
+            .classify("Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)");
         assert_eq!(cat2, BotCategory::LegitimateSearch);
         assert_eq!(tok2.as_deref(), Some("Googlebot"));
     }
@@ -759,7 +768,8 @@ mod tests {
         assert!(v_install.is_allowed());
 
         // Claude-SearchBot blocked on sitemap or root
-        let v_claude_sitemap = guard.evaluate_perimeter(Some("Claude-SearchBot/1.0"), "/sitemap.xml");
+        let v_claude_sitemap =
+            guard.evaluate_perimeter(Some("Claude-SearchBot/1.0"), "/sitemap.xml");
         assert!(v_claude_sitemap.is_blocked());
 
         let v_claude_root = guard.evaluate_perimeter(Some("Claude-SearchBot/1.0"), "/");

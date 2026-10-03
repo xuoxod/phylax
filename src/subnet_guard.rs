@@ -43,7 +43,10 @@ pub enum IpRiskCategory {
 impl IpRiskCategory {
     #[inline]
     pub fn is_high_risk(&self) -> bool {
-        matches!(self, IpRiskCategory::Datacenter { .. } | IpRiskCategory::TorExit { .. })
+        matches!(
+            self,
+            IpRiskCategory::Datacenter { .. } | IpRiskCategory::TorExit { .. }
+        )
     }
 }
 

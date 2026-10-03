@@ -497,7 +497,8 @@ async fn run_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     #[cfg(feature = "abuse-reporting")]
     if abuse_reporting_enabled {
-        let is_dry = abuse_dry_run || (!syslog_cef && abuseipdb_key.is_none() && webhook_url.is_none());
+        let is_dry =
+            abuse_dry_run || (!syslog_cef && abuseipdb_key.is_none() && webhook_url.is_none());
         let informant_config = phylax::abuse_reporting::InformantConfig {
             enabled: true,
             dry_run: is_dry,
@@ -551,7 +552,11 @@ async fn run_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Error>> {
     println!("  🧩 PoW Difficulty:     {} bits", pow_difficulty);
     println!(
         "  🕸️  Asymmetric Tarpit:  {}",
-        if tarpit_enabled { "ENABLED" } else { "DISABLED" }
+        if tarpit_enabled {
+            "ENABLED"
+        } else {
+            "DISABLED"
+        }
     );
     println!(
         "  🔒 Autonomous CIDR:    {}",
@@ -561,10 +566,7 @@ async fn run_serve(args: ServeArgs) -> Result<(), Box<dyn std::error::Error>> {
             "DISABLED"
         }
     );
-    println!(
-        "  🧹 Memory Maintenance: Every {}s",
-        maintenance_interval_s
-    );
+    println!("  🧹 Memory Maintenance: Every {}s", maintenance_interval_s);
     println!("\n  Endpoints Active:");
     println!("    • GET  /_phylax/challenge -> Issue client tokens + PoW challenge");
     println!("    • GET  /_phylax/healthz   -> Health check & uptime");

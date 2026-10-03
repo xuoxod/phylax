@@ -153,7 +153,8 @@ impl ShieldPipeline {
         client_ip: std::net::IpAddr,
         now_ms: u64,
     ) -> Option<crate::threat_harvester::PromotionVerdict> {
-        self.threat_harvester.ingest_anomalous_uri(raw_path, client_ip, now_ms)
+        self.threat_harvester
+            .ingest_anomalous_uri(raw_path, client_ip, now_ms)
     }
 
     /// Convenience wrapper to record anomalous URI using string IP representation
@@ -163,7 +164,8 @@ impl ShieldPipeline {
         client_ip_str: &str,
         now_ms: u64,
     ) -> Option<crate::threat_harvester::PromotionVerdict> {
-        self.threat_harvester.ingest_anomalous_uri_str(raw_path, client_ip_str, now_ms)
+        self.threat_harvester
+            .ingest_anomalous_uri_str(raw_path, client_ip_str, now_ms)
     }
 
     /// Access the Tarpit Governor
@@ -268,7 +270,11 @@ impl ShieldPipeline {
         // 0.5 Layer 0.5: Decoy URI Reconnaissance Check (~5-10ns)
         if let Some(target_uri) = req.target_uri {
             let uri_verdict = self.decoy_uri.evaluate(target_uri);
-            if let DecoyUriVerdict::Trapped { matched_path, category } = uri_verdict {
+            if let DecoyUriVerdict::Trapped {
+                matched_path,
+                category,
+            } = uri_verdict
+            {
                 if !req.client_ip.is_empty() {
                     self.quarantine.record_and_check(req.client_ip, req.now_ms);
                     self.adaptive_pow.record_infraction(
