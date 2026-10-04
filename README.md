@@ -5,7 +5,8 @@
 [![Rust: 1.75+](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
 [![Zero-Telemetry](https://img.shields.io/badge/telemetry-zero-success.svg)](https://github.com/xuoxod/phylax)
 
-> **φύλαξ** (*phýlax* — ancient Greek for *"watcher, sentinel, guardian"*): A sovereign, zero-telemetry edge defense, honeypot tarpit, and autonomous threat neutralization engine written in pure Rust.
+> **φύλαξ** (*phýlax* — ancient Greek for *"watcher, sentinel, guardian"*): A sovereign, zero-telemetry edge defense, honeypot tarpit, and autonomous threat neutralization engine written in pure Rust.  
+> 🛡️ *"From the wire to the RAM / 'Til the kernel drops that spam."*
 
 `phylax` shields web applications, APIs, and authentication endpoints against credential stuffing, automated bot swarms, Tor/datacenter crawlers, Slowloris starvation, and scraping—executing in **sub-microsecond memory operations** without sending a single byte of user telemetry to third parties.
 
